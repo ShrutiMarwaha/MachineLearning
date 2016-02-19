@@ -1,0 +1,159 @@
+---
+title: "MachineLearning_ContinousData_Wages"
+author: "Shruti"
+date: "February 18, 2016"
+---
+
+**Load Required Packages**
+```{r Chunk 1: load packages}
+library(caret)
+library(ISLR)
+library(ggplot2)
+library(Metrics) # RMSE
+# libraries for partition trees
+library(rpart)
+library(rpart.plot)
+library(rattle)
+```
+
+**split data**
+```{r Chunk 2: split data}
+data(Wage)
+colnames(Wage)
+
+set.seed(1)
+training_indices <- createDataPartition(y=Wage$wage,p=0.8,list=F)
+# remove log-wage column as feature and store wage column as outcome
+training_features <- Wage[training_indices,-c(11,12)]
+test_features <- Wage[-training_indices,-c(11,12)]
+training_outcome <- Wage[training_indices,12]
+test_outcome <- Wage[-training_indices,12]
+# dim(training_features); dim(test_features)
+# length(training_outcome); length(test_outcome)
+```
+
+**exploratory data analysis**
+```{r}
+summary(Wage)
+# remove zero covaritates (features with no variability)
+nearZeroVar(training_features,saveMetrics = T)
+near_zero_covariates <- nearZeroVar(training_features)
+head(near_zero_covariates)
+length(near_zero_covariates)
+training_features2 <- training_features[,-near_zero_covariates]
+test_features2 <- test_features[,-near_zero_covariates]
+dim(training_features2); dim(test_features2)
+
+# exploratory plots
+featurePlot(x=training_features2, y=training_outcome, plot="pairs")
+qplot(x=training_features2$year, y=training_outcome ,ylab="wage")
+qplot(x=training_features2$age, y=training_outcome ,ylab="wage")
+qplot(x=training_features2$age, y=training_outcome, color=training_features2$education,pch=training_features2$jobclass ,ylab="wage")
+# add regression smoother
+qq <- qplot(x=training_features2$age, y=training_outcome, color=training_features2$education,pch=training_features2$jobclass ,ylab="wage")
+qq + geom_smooth(method="lm",formula=y~x)
+
+qplot(x=training_features2$maritl, y=training_outcome ,ylab="wage", color=training_features2$age)
+qplot(x=training_features2$age, y=training_outcome, color=training_features2$maritl ,ylab="wage")
+
+qplot(x=training_features2$race,y=training_outcome,color=training_features2$education ,pch=training_features2$jobclass,cex=1,ylab="wage")
+qplot(x=training_features2$health,y=training_outcome,color=training_features2$health_ins ,pch=training_features2$jobclass,cex=1,ylab="wage")
+
+# correlated features
+# all features should be numeric to calculate correlation
+# apply(training_features2[,-2],2,function(i) {levels(as.factor(i))})
+# head(apply(training_features2[,-2],2,function(i) {as.numeric(as.factor(i))}))
+training_numeric_features <- apply(training_features2[,-2],2,function(i) {as.numeric(as.factor(i))}) 
+training_features3 <- cbind(age=training_features2$age,training_numeric_features)
+test_numeric_features <- apply(test_features2[,-2],2,function(i) {as.numeric(as.factor(i))}) 
+test_features3 <- cbind(age=test_features2$age,test_numeric_features)
+
+feature_correlation <- cor(training_features3)
+# search through a correlation matrix and returns a vector of integers corresponding to columns to remove to reduce pair-wise correlations.
+high_correlation <- findCorrelation(feature_correlation,0.8)
+head(high_correlation)
+# training_features3 <- training_features2[,-high_correlation]
+# test_features3 <- test_features2[,-high_correlation]
+# dim(training_features3); dim(test_features3)
+
+# PCA
+pc <- prcomp(training_features3,center=T,scale=T)
+plot(pc,type="l")
+```
+
+**model building**
+```{r}
+# since correlation and PCA shows all features are important, all of them are used in the model
+# k-fold cross validation
+train_control <- trainControl(method="cv", number=10, savePredictions = T)
+# fix the parameters of the algorithm
+grid <- expand.grid(.fL=c(0), .usekernel=c(FALSE))
+
+# linear regression
+set.seed(1)
+lm_model <- train(x=training_features2, y=training_outcome, trControl=train_control, method="lm" ,preProcess=c("scale","center","pca"))
+
+lm_model
+# summary(lm_model)
+# lm_model$finalModel
+varImp(lm_model)
+plot(varImp(lm_model))
+
+# re-train model using features that look important
+set.seed(1)
+lm_model2 <- train(x=training_features2[,c("education","jobclass","health_ins","maritl")], y=training_outcome, trControl=train_control, method="lm")
+
+# tree / recursive partioning
+set.seed(1)
+rpart_model <- train(x=training_features2, y=training_outcome, trControl=train_control, method="rpart" ,preProcess=c("scale","center","pca"))
+# plot classification trees
+fancyRpartPlot(rpart_model$finalModel)
+
+# boosting with tres
+set.seed(1)
+gbm_model <- train(x=training_features2, y=training_outcome, trControl=train_control, method = "gbm", verbose=F ,preProcess=c("scale","center","pca"))
+
+# random forest. this will take time for high "k" fold cv
+set.seed(1)
+rf_model <- train(x=training_features2, y=training_outcome, trControl=train_control, method="rf" ,preProcess=c("scale","center","pca"))
+
+# TO DO: models not working:
+# lasso - regularized regression
+# set.seed(1)
+# lasso_model <- train(x=training_features2, y=training_outcome, trControl=train_control, method="lasso", metric="RMSE" ,preProcess=c("scale","center","pca"))
+
+# collect resamples
+train_results <- resamples(list(LM=lm_model,LM2=lm_model2,RPART=rpart_model,GBM=gbm_model,RF=rf_model))
+# summarize the distributions
+summary(train_results)
+# boxplots of results
+bwplot(train_results)
+# the above results suggest that GBM model performs best on the training data.
+```
+
+**EVALUATE MODEL ACCURACY ON TEST SET**
+#Ideally, you select model that performs best on training data and evaluate on test set. I am doing for all models just for illustration 
+```{r}
+par(mfrow=c(2,2))
+test_pred_lm <- predict(lm_model, newdata=test_features2)
+rmse(test_outcome,test_pred_lm)
+plot(test_pred_lm,test_outcome)
+
+test_pred_lm2 <- predict(lm_model2, newdata=test_features2)
+rmse(test_outcome,test_pred_lm2)
+plot(test_pred_lm2,test_outcome)
+
+test_pred_rpart <- predict(rpart_model, newdata=test_features2)
+rmse(test_outcome,test_pred_rpart)
+plot(test_pred_rpart,test_outcome)
+
+test_pred_gbm <- predict(gbm_model, newdata=test_features2)
+rmse(test_outcome,test_pred_gbm)
+plot(test_pred_gbm,test_outcome)
+
+test_pred_rf <- predict(rf_model, newdata=test_features2)
+rmse(test_outcome,test_pred_rf)
+plot(test_pred_rf,test_outcome)
+```
+
+
