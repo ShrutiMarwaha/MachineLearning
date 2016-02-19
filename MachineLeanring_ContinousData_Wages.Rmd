@@ -132,8 +132,8 @@ bwplot(train_results)
 ```
 
 **EVALUATE MODEL ACCURACY ON TEST SET**
-#Ideally, you select model that performs best on training data and evaluate on test set. I am doing for all models just for illustration 
 ```{r}
+#Ideally, you select model that performs best on training data and evaluate on test set. I am doing for all models just for illustration 
 par(mfrow=c(2,2))
 test_pred_lm <- predict(lm_model, newdata=test_features2)
 rmse(test_outcome,test_pred_lm)
