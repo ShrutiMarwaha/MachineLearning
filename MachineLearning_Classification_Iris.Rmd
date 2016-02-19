@@ -1,0 +1,131 @@
+---
+title: "MachineLearning_Classification_Iris"
+author: "Shruti"
+date: "February 19, 2016"
+output: html_document
+---
+
+**Load Required Packages**
+```{r}
+library(caret)
+# libraries for partition trees
+library(rpart)
+library(rpart.plot)
+library(rattle)
+```
+
+**split data**
+```{r}
+data(iris)
+head(iris)
+dim(iris)
+table(iris$Species)
+
+set.seed(1)
+training_indices <- createDataPartition(y=iris$Species,p=0.8,list=F)
+training_set <- iris[training_indices,]
+validation_set <- iris[-training_indices,]
+dim(training_set); dim(validation_set);
+```
+
+**exploratory data analysis**
+```{r}
+# exploratory plots
+featurePlot(x=training_set[,1:4], y=training_set[,5], plot="pairs", auto.key=list(columns=3))
+featurePlot(x=training_set[,1:4], y=training_set[,5], plot="density", scales=list(x=list(relation="free"), y=list(relation="free")), auto.key=list(columns=3))
+featurePlot(x=training_set[,1:4], y=training_set[,5], plot="box", scales=list(x=list(relation="free"), y=list(relation="free")), auto.key=list(columns=3))
+
+# remove zero covaritates (features with no variability)
+nearZeroVar(training_set[,-5],saveMetrics = T)
+near_zero_covariates <- nearZeroVar(training_set[,-5])
+head(near_zero_covariates)
+length(near_zero_covariates)
+
+feature_correlation <- cor(training_set[,-5])
+# search through a correlation matrix and returns a vector of integers corresponding to columns to remove to reduce pair-wise correlations.
+high_correlation <- findCorrelation(feature_correlation,0.9)
+head(high_correlation)
+#length(high_correlation)
+
+# PCA
+pc <- prcomp(training_set[,-5],center=T,scale=T)
+plot(pc,type="l")
+```
+
+**model building**
+```{r}
+# k-fold cross validation
+train_control <- trainControl(method="cv", number=5, savePredictions = T)
+# fix the parameters of the algorithm
+grid <- expand.grid(.fL=c(0), .usekernel=c(FALSE))
+
+# model building
+# svm - linear
+set.seed(1)
+svm_lm_model <- train(Species ~ .,data = training_set, trControl=train_control, method = "svmLinear",preProcess = c("center", "scale","pca"))
+
+svm_lm_model
+varImp(svm_lm_model)
+plot(varImp(svm_lm_model))
+
+# svm - rbf kernel
+set.seed(1)
+svm_rbf_model <- train(Species ~ .,data = training_set, trControl=train_control, method = "svmRadial",preProcess = c("center", "scale","pca"))
+
+# classification Trees
+set.seed(1)
+#rpart_model <- train(Species ~ .,data = training_set, trControl=train_control, method = "rpart")
+rpart_model <- train(Species ~ .,data = training_set, trControl=train_control, method = "rpart",preProcess = c("center", "scale","pca"))
+# plot classification trees
+fancyRpartPlot(rpart_model$finalModel)
+
+# random forest
+set.seed(1)
+rf_model <- train(Species ~ .,data = training_set, trControl=train_control, method = "rf",preProcess = c("center", "scale","pca"),prox=T)
+
+# boosting with tres
+set.seed(1)
+gbm_model <- train(Species ~ .,data = training_set, trControl=train_control, method = "gbm", preProcess = c("center", "scale","pca"), verbose=F)
+
+# naive bayes
+set.seed(1)
+nb_model <- train(Species~., data=training_set, trControl=train_control, method="nb", tuneGrid=grid,preProcess = c("center", "scale","pca"))
+
+# linear discriminant analysis
+set.seed(1)
+lda_model <- train(Species~., data=training_set, trControl=train_control, method="lda", preProcess = c("center", "scale","pca"))
+
+# collect resamples
+train_results <- resamples(list(SVM_LM=svm_lm_model,SVM_RBF=svm_rbf_model,RPART=rpart_model,GBM=gbm_model,RF=rf_model,NB=nb_model,LDA=lda_model))
+# summarize the distributions
+summary(train_results)
+# boxplots of results
+bwplot(train_results)
+# the above results suggest that GBM, SVM, LDA model performs best on the training data.
+```
+
+**EVALUATE MODEL ACCURACY ON TEST SET**
+```{r}
+#Ideally, you select model that performs best on training data and evaluate on test set. I am doing for all models just for illustration 
+validation_pred_svm_lm <- predict(svm_lm_model, newdata=validation_set)
+confusionMatrix(data=validation_pred_svm_lm, validation_set$Species)
+
+validation_pred_svm_rbf <- predict(svm_lm_model, newdata=validation_set)
+confusionMatrix(data=validation_pred_svm_rbf, validation_set$Species)
+
+validation_pred_rpart <- predict(rpart_model, newdata=validation_set)
+#confusionMatrix(data=validation_pred_rpart, validation_set$Species)
+
+validation_pred_gbm <- predict(gbm_model, newdata=validation_set)
+confusionMatrix(data=validation_pred_gbm, validation_set$Species)
+
+validation_pred_rf <- predict(rf_model, newdata=validation_set)
+#confusionMatrix(data=validation_pred_rf, validation_set$Species)
+
+validation_pred_nb <- predict(nb_model, newdata=validation_set)
+#confusionMatrix(data=validation_pred_nb, validation_set$Species)
+
+validation_pred_lda <- predict(lda_model, newdata=validation_set)
+confusionMatrix(data=validation_pred_lda, validation_set$Species)
+```
+
