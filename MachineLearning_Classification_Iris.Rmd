@@ -4,6 +4,7 @@ author: "Shruti"
 date: "February 19, 2016"
 output: html_document
 ---
+Machine Learning Classification Problem example. Uses different machine learning algorithms to classify flowers into 3 different category based on 4 features.
 
 **Load Required Packages**
 ```{r}
@@ -110,7 +111,7 @@ bwplot(train_results)
 validation_pred_svm_lm <- predict(svm_lm_model, newdata=validation_set)
 confusionMatrix(data=validation_pred_svm_lm, validation_set$Species)
 
-validation_pred_svm_rbf <- predict(svm_lm_model, newdata=validation_set)
+validation_pred_svm_rbf <- predict(svm_rbf_model, newdata=validation_set)
 confusionMatrix(data=validation_pred_svm_rbf, validation_set$Species)
 
 validation_pred_rpart <- predict(rpart_model, newdata=validation_set)
