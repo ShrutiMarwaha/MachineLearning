@@ -10,7 +10,6 @@ Machine Learning - Continous Data example. Uses different machine learning algor
 library(caret)
 library(ISLR)
 library(ggplot2)
-library(Metrics) # RMSE
 # libraries for partition trees
 library(rpart)
 library(rpart.plot)
@@ -20,6 +19,7 @@ library(rattle)
 **split data**
 ```{r Chunk 2: split data}
 data(Wage)
+dim(Wage)
 colnames(Wage)
 
 set.seed(1)
@@ -145,23 +145,28 @@ bwplot(train_results)
 #Ideally, you select model that performs best on training data and evaluate on test set. I am doing for all models just for illustration 
 par(mfrow=c(2,2))
 test_pred_lm <- predict(lm_model, newdata=test_set3)
-rmse(test_set3$wage,test_pred_lm)
+R2(test_set3$wage,test_pred_lm)
+RMSE(test_set3$wage,test_pred_lm)
 plot(test_pred_lm,test_set3$wage)
 
 test_pred_lm2 <- predict(lm_model2, newdata=test_set3)
-rmse(test_set3$wage,test_pred_lm2)
+R2(test_set3$wage,test_pred_lm2)
+RMSE(test_set3$wage,test_pred_lm2)
 plot(test_pred_lm2,test_set3$wage)
 
 test_pred_rpart <- predict(rpart_model, newdata=test_set3)
-rmse(test_set3$wage,test_pred_rpart)
+R2(test_set3$wage,test_pred_rpart)
+RMSE(test_set3$wage,test_pred_rpart)
 plot(test_pred_rpart,test_set3$wage)
 
 test_pred_gbm <- predict(gbm_model, newdata=test_set3)
-rmse(test_set3$wage,test_pred_gbm)
+R2(test_set3$wage,test_pred_gbm)
+RMSE(test_set3$wage,test_pred_gbm)
 plot(test_pred_gbm,test_set3$wage)
 
 test_pred_rf <- predict(rf_model, newdata=test_set3)
-rmse(test_set3$wage,test_pred_rf)
+R2(test_set3$wage,test_pred_rf)
+RMSE(test_set3$wage,test_pred_rf)
 plot(test_pred_rf,test_set3$wage)
 ```
 
