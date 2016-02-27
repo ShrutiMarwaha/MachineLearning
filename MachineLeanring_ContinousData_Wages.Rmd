@@ -101,17 +101,18 @@ grid <- expand.grid(.fL=c(0), .usekernel=c(FALSE))
 
 # linear regression
 set.seed(1)
-lm_model <- train(wage~., data=training_set3, trControl=train_control, method="lm" ,preProcess=c("scale","center","pca"))
+lm_model <- train(wage~., data=training_set3, trControl=train_control, method="lm" ,preProcess=c("scale","center","pca")) 
 
-lm_model
-# summary(lm_model)
+#lm_model
+summary(lm_model)
 # lm_model$finalModel
 varImp(lm_model)
 plot(varImp(lm_model))
 
 # re-train model using features that look important
+varImp(train(wage~., data=training_set3, trControl=train_control, method="lm" ,preProcess=c("scale","center"))) # not including pca in preProcess as its difficult to interpret their importance in model
 set.seed(1)
-lm_model2 <- train(wage ~ education + jobclass + health_ins + maritl, data=training_set3, trControl=train_control, method="lm")
+lm_model2 <- train(wage ~ education + health_ins + jobclass + maritl, data=training_set3, trControl=train_control, method="lm",preProcess=c("scale","center","pca"))
 
 # tree / recursive partioning
 set.seed(1)
@@ -122,6 +123,7 @@ fancyRpartPlot(rpart_model$finalModel)
 # boosting with tres
 set.seed(1)
 gbm_model <- train(wage~., data=training_set3, trControl=train_control, method = "gbm", verbose=F ,preProcess=c("scale","center","pca"))
+summary(train(wage~., data=training_set3, trControl=train_control, method = "gbm", verbose=F ,preProcess=c("scale","center")))
 
 # random forest. this will take time for high "k" fold cv
 set.seed(1)
@@ -132,12 +134,12 @@ set.seed(1)
 lasso_model <- train(wage~., data=training_set3, trControl=train_control, method="lasso", metric="RMSE" ,preProcess=c("scale","center","pca"))
 
 # collect resamples
-train_results <- resamples(list(LM=lm_model,LM2=lm_model2,RPART=rpart_model,GBM=gbm_model,RF=rf_model))
+train_results <- resamples(list(LM=lm_model,LM2=lm_model2,RPART=rpart_model,GBM=gbm_model,RF=rf_model,LS=lasso_model))
 # summarize the distributions
 summary(train_results)
 # boxplots of results
 bwplot(train_results)
-# the above results suggest that LM n GBM model performs best on the training data.
+# the above results suggest that GBM model performs best on the training data.
 ```
 
 **EVALUATE MODEL ACCURACY ON TEST SET**
@@ -168,6 +170,11 @@ test_pred_rf <- predict(rf_model, newdata=test_set3)
 R2(test_set3$wage,test_pred_rf)
 RMSE(test_set3$wage,test_pred_rf)
 plot(test_pred_rf,test_set3$wage)
+
+test_pred_lasso <- predict(lasso_model, newdata=test_set3)
+R2(test_set3$wage,test_pred_lasso)
+RMSE(test_set3$wage,test_pred_lasso)
+plot(test_pred_lasso,test_set3$wage)
 ```
 
 
