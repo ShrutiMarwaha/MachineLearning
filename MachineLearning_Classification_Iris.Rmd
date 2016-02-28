@@ -21,13 +21,6 @@ data(iris)
 head(iris)
 dim(iris)
 table(iris$Species)
-
-#see how data groups into different clusters
-set.seed(1)
-km <- kmeans(iris[,1:4], 3)
-plot(iris[,1], iris[,2], col=km$cluster)
-points(km$centers[,c(1,2)], col=1:3, pch=19, cex=2)
-table(km$cluster, iris$Species)
 ```
 
 
@@ -43,6 +36,13 @@ dim(training_set); dim(validation_set);
 **exploratory data analysis**
 ```{r}
 # exploratory plots
+#see how data groups into different clusters
+set.seed(1)
+km <- kmeans(training_set[,1:4], 3)
+plot(training_set[,1], training_set[,2], col=km$cluster)
+points(km$centers[,c(1,2)], col=1:3, pch=19, cex=2)
+table(km$cluster, training_set$Species)
+
 featurePlot(x=training_set[,1:4], y=training_set[,5], plot="pairs", auto.key=list(columns=3))
 featurePlot(x=training_set[,1:4], y=training_set[,5], plot="density", scales=list(x=list(relation="free"), y=list(relation="free")), auto.key=list(columns=3))
 featurePlot(x=training_set[,1:4], y=training_set[,5], plot="box", scales=list(x=list(relation="free"), y=list(relation="free")), auto.key=list(columns=3))
