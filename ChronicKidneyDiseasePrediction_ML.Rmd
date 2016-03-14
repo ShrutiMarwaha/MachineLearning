@@ -5,7 +5,8 @@ date: "February 25, 2016"
 output: html_document
 ---
 
-Machine Learning Classification Problem example. Uses different machine learning algorithms to classify patients with Chronic Kidney Disease or not based on 24 features.
+Machine Learning Classification Problem example. Uses different machine learning algorithms to classify patients with Chronic Kidney Disease or not based on 24 features. 
+https://archive.ics.uci.edu/ml/datasets/Chronic_Kidney_Disease
 
 **Load Required Packages**
 ```{r}
@@ -33,18 +34,24 @@ summary(Chronic_Kidney_Disease)
 apply(Chronic_Kidney_Disease,2,function(i) {(sum(is.na(i))/nrow(Chronic_Kidney_Disease))*100})
 # samples with no missing data
 sum(complete.cases(Chronic_Kidney_Disease))
+# samples with no missing data after removing columns which have more than 25% of data missing
+sum(complete.cases(Chronic_Kidney_Disease[,-c(6,17,18)]))
 
 ### remove rows with any missing value
 Chronic_Kidney_Disease2 <- Chronic_Kidney_Disease[complete.cases(Chronic_Kidney_Disease),]
 dim(Chronic_Kidney_Disease2)
+sapply(Chronic_Kidney_Disease2[1,],class)
+apply(Chronic_Kidney_Disease[,c(3:9,19:25)],2,table)
 ```
 
 **split data**
 ```{r}
 set.seed(1)
 training_index <- createDataPartition(Chronic_Kidney_Disease2$class,p=0.8,list=F)
-training_set <- Chronic_Kidney_Disease2[training_index,]
-test_set <- Chronic_Kidney_Disease2[-training_index,]
+# training_set <- Chronic_Kidney_Disease2[training_index,]
+# test_set <- Chronic_Kidney_Disease2[-training_index,]
+training_set <- droplevels(Chronic_Kidney_Disease2[training_index,])
+test_set <- droplevels(Chronic_Kidney_Disease2[-training_index,])
 dim(training_set); dim(test_set)
 ```
 
@@ -86,7 +93,6 @@ if(length(high_correlation)>0)
 }
 dim(training_set3); dim(test_set3)
 
-
 # plots
 # PCA
 numeric_set2 <- which(sapply(training_set3[1,],class)=="numeric")
@@ -106,13 +112,11 @@ for(i in seq_along(colnames(training_set3[,1:21])))
 ```{r}
 # k-fold cross validation
 train_control <- trainControl(method="cv", number=5, savePredictions = T)
-# fix the parameters of the algorithm
-grid <- expand.grid(.fL=c(0), .usekernel=c(FALSE))
 
 # model building
 # svm - linear
 set.seed(1)
-svm_lm_model <- train(class ~ .,data = training_set3, trControl=train_control, method = "svmLinear")
+svm_lm_model <- train(class ~ .,data = training_set3, trControl=train_control, method = "svmLinear",preProcess = c("center", "scale","pca"))
 
 svm_lm_model
 varImp(svm_lm_model)
@@ -120,18 +124,26 @@ plot(varImp(svm_lm_model))
 
 # svm - rbf kernel
 set.seed(1)
-svm_rbf_model <- train(class ~ .,data = training_set3, trControl=train_control, method = "svmRadial")
+svm_rbf_model <- train(class ~ .,data = training_set3, trControl=train_control, method = "svmRadial",preProcess = c("center", "scale","pca"))
 
 # logistic regression
 set.seed(1)
-glm_model <- train(class ~ .,data = training_set3, trControl=train_control, method = "glm",family=binomial)
+glm_model <- train(class ~ .,data = training_set3, trControl=train_control, method = "glm",family=binomial,maxit=100)
+# possible warnings with glm:
+#1. "glm.fit: algorithm did not converge"; use maxit much greater than default value of 25"
+#2. "glm.fit: fitted probabilities numerically 0 or 1 occurred" indicates that you should use penalized regression. Your fit is exactly collinear.
+#3. "prediction from a rank-deficient fit may be misleading in:" indicates If the fit is rank-deficient, some of the columns of the design matrix will have been dropped. Prediction from such a fit only makes sense if 'newdata' is contained in the same subspace as the original data.
 
 # classification Trees
 set.seed(1)
 rpart_model <- train(class ~ .,data = training_set3, trControl=train_control, method = "rpart")
+plot(varImp(rpart_model))
 # plot classification trees
 fancyRpartPlot(rpart_model$finalModel)
-#plot(varImp(rpart_model))
+summary(subset(training_set3,class=="ckd",hemo))
+summary(subset(training_set3,class=="notckd",hemo))
+plot(training_set3$class,training_set3$hemo)
+plot(varImp(rpart_model))
 plot(rpart_model)
 
 # random forest
@@ -144,26 +156,25 @@ set.seed(1)
 gbm_model <- train(class ~ .,data = training_set3, trControl=train_control, method = "gbm", verbose=F)
 plot(gbm_model)
 
-# TO DO: models not working:
-#svm_lm_model <- train(class ~ .,data = training_set3, trControl=train_control, method = "svmLinear",preProcess = c("center", "scale","pca"))
+linear discriminant analysis
+set.seed(1)
+lda_model <- train(class~., data=training_set3, trControl=train_control, method="lda")
 
+# TO DO: following gives warnings:
 # naive bayes
-# set.seed(1)
-# nb_model <- train(class~., data=training_set3, trControl=train_control, method="nb", tuneGrid=grid)
-# 
-# linear discriminant analysis
-# set.seed(1)
-# lda_model <- train(class~., data=training_set3, trControl=train_control, method="lda")
+# fix the parameters of the algorithm
+grid <- expand.grid(.fL=c(0), .usekernel=c(TRUE))
+set.seed(1)
+nb_model <- train(class~., data=training_set3, trControl=train_control, method="nb", tuneGrid=grid)
 
 # collect resamples
-#train_results <- resamples(list(SVM_LM=svm_lm_model,SVM_RBF=svm_rbf_model,RPART=rpart_model,GBM=gbm_model,RF=rf_model,NB=nb_model,LDA=lda_model,glm_model))
-train_results <- resamples(list(SVM_LM=svm_lm_model,SVM_RBF=svm_rbf_model,RPART=rpart_model,GBM=gbm_model,RF=rf_model,GLM=glm_model))
+train_results <- resamples(list(SVM_LM=svm_lm_model,SVM_RBF=svm_rbf_model,RPART=rpart_model,GBM=gbm_model,RF=rf_model,NB=nb_model,LDA=lda_model,GLM=glm_model))
 # summarize the distributions
 summary(train_results)
 # boxplots of results
 bwplot(train_results)
 # the above results suggest that random forest model performs best on the training data.
-lapply((list(SVM_LM=svm_lm_model,SVM_RBF=svm_rbf_model,RPART=rpart_model,GBM=gbm_model,RF=rf_model,GLM=glm_model)),varImp)
+lapply((list(SVM_LM=svm_lm_model,SVM_RBF=svm_rbf_model,RPART=rpart_model,GBM=gbm_model,RF=rf_model,NB=nb_model,LDA=lda_model,GLM=glm_model)),varImp)
 ```
 
 **EVALUATE MODEL ACCURACY ON TEST SET**
@@ -184,10 +195,10 @@ confusionMatrix(data=test_pred_gbm, test_set3$class)
 test_pred_rf <- predict(rf_model, newdata=test_set3)
 confusionMatrix(data=test_pred_rf, test_set3$class)
 
-# test_pred_nb <- predict(nb_model, newdata=test_set3)
-# confusionMatrix(data=test_pred_nb, test_set3$class)
-# 
-# test_pred_lda <- predict(lda_model, newdata=test_set3)
-# confusionMatrix(data=test_pred_lda, test_set3$class)
+test_pred_nb <- predict(nb_model, newdata=test_set3)
+confusionMatrix(data=test_pred_nb, test_set3$class)
+
+test_pred_lda <- predict(lda_model, newdata=test_set3)
+confusionMatrix(data=test_pred_lda, test_set3$class)
 ```
 
