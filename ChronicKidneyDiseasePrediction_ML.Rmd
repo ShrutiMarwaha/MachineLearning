@@ -16,6 +16,8 @@ library(caret)
 library(rpart)
 library(rpart.plot)
 library(rattle)
+
+library(ROCR)
 ```
 
 **load data** 
@@ -50,12 +52,14 @@ sapply(Chronic_Kidney_Disease2[1,],class)
 # since many of the features are categorical, convert them into dummy varaibles. 
 dummy_variables <- dummyVars(~.,data=Chronic_Kidney_Disease2,fullRank=T)
 dataset_dummy_variables <- data.frame(predict(dummy_variables, newdata=Chronic_Kidney_Disease2))
+table(Chronic_Kidney_Disease2$class)
+table(dataset_dummy_variables$class.notckd) # 0 implies ckd; 1 implies notckd
 ```
 
 **split data**
 ```{r}
 set.seed(1)
-training_index <- createDataPartition(dataset_dummy_variables$class.notckd,p=0.8,list=F)
+training_index <- createDataPartition(dataset_dummy_variables$class.notckd,p=0.6,list=F)
 # column id of the outcome
 outcome_column_id <- grep("class.notckd",colnames(dataset_dummy_variables))
 
@@ -64,8 +68,9 @@ test_set <- droplevels(dataset_dummy_variables[-training_index,-outcome_column_i
 dim(training_set); dim(test_set)
 
 # if you are trying to do classification using regression models, it is imp to use outcome as factor not numeric
-outcome_training_set <- as.factor(dataset_dummy_variables[training_index,outcome_column_id])
-outcome_test_set <- as.factor(dataset_dummy_variables[-training_index,outcome_column_id])
+outcome_training_set <- factor(dataset_dummy_variables[training_index,outcome_column_id],ordered=TRUE)
+outcome_test_set <- factor(dataset_dummy_variables[-training_index,outcome_column_id])
+table(outcome_training_set) ; table(outcome_test_set)
 ```
 
 **exploratory data analysis**
@@ -134,17 +139,13 @@ train_control <- trainControl(method="cv", number=5, savePredictions = T)
 set.seed(1)
 svm_lm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "svmLinear",preProcess = c("center", "scale","pca"))
 
-svm_lm_model
-varImp(svm_lm_model)
-plot(varImp(svm_lm_model))
-
 # svm - rbf kernel
 set.seed(1)
-svm_rbf_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "svmRadial",preProcess = c("center", "scale","pca"))
+svm_rbf_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "svmRadial", tuneLegth=5, preProcess = c("center", "scale","pca"))
 
 # logistic regression
 set.seed(1)
-glm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glm",family=binomial,maxit=100)
+glm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glm",family=binomial,maxit=100, preProcess = c("center", "scale","pca"))
 # possible warnings with glm:
 #1. "glm.fit: algorithm did not converge"; use maxit much greater than default value of 25"
 #2. "glm.fit: fitted probabilities numerically 0 or 1 occurred" indicates that you should use penalized regression. Your fit is exactly collinear.
@@ -152,35 +153,29 @@ glm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train
 
 # Ridge Regression creates a linear regression model that is penalized with the L2-norm which is the sum of the squared coefficients.
 set.seed(1)
-ridge_regression_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=0,lambda=0.001))
+ridge_regression_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=0,lambda=0.001),preProcess = c("center", "scale","pca"))
 
 # LASSO (Least Absolute Shrinkage and Selection Operator) creates a regression model that is penalized with the L1-norm which is the sum of the absolute coefficients. 
 set.seed(1)
-lasso_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=1,lambda=0.001))
+lasso_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=1,lambda=0.001),preProcess = c("center", "scale","pca"))
 
 # Elastic Net creates a regression model that is penalized with both the L1-norm and L2-norm. 
 set.seed(1)
-elastic_net_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=0.5,lambda=0.001))
+elastic_net_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=0.5,lambda=0.001),preProcess = c("center", "scale","pca"))
 
 # classification Trees
 set.seed(1)
-rpart_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "rpart")
-plot(varImp(rpart_model))
-# plot classification trees
-fancyRpartPlot(rpart_model$finalModel)
-# summary(subset(final_training_set,class=="ckd",hemo))
-# summary(subset(final_training_set,class=="notckd",hemo))
-# plot(final_training_set$class,final_training_set$hemo)
+rpart_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "rpart",preProcess = c("center", "scale","pca"))
 plot(rpart_model)
 
 # random forest
 set.seed(1)
-rf_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "rf",prox=T)
+rf_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "rf",prox=T,preProcess = c("center", "scale"))
 plot(rf_model)
 
 # boosting with tres
 set.seed(1)
-gbm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "gbm", verbose=F)
+gbm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "gbm", verbose=F,preProcess = c("center", "scale","pca"))
 plot(gbm_model)
 
 # linear discriminant analysis
@@ -191,7 +186,7 @@ lda_model <- train(y=outcome_training_set, x=final_training_set, trControl=train
 # parameters of the algorithm: fl: Factor for Laplace correction, default factor is 0, i.e. no correction;
 # usekernel: if TRUE a kernel density estimate (density) is used for denstity estimation. If FALSE a normal density is estimated.
 set.seed(1)
-nb_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method="nb", tuneGrid=expand.grid(.fL=c(0), .usekernel=c(TRUE)))
+nb_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method="nb", tuneGrid=expand.grid(.fL=c(0), .usekernel=c(TRUE)) ,preProcess = c("center", "scale","pca"))
 warnings()
 # "The function NaiveBayes prints a warning if all these probabilities are numerical 0, i.e. that the observation has a numerical probability of 0 for all classes. "
 
@@ -202,19 +197,17 @@ train_results <- resamples(training_models)
 summary(train_results)
 # boxplots of results
 bwplot(train_results)
-# the above results suggest that random forest model performs best on the training data.
-
-lapply(training_models,varImp)
+# the above results suggest that svm-rf and random forest model performs best on the training data.
 ```
 
 **EVALUATE MODEL ACCURACY ON TEST SET**
 ```{r}
 #Ideally, you select model that performs best on training data and evaluate on test set. I am doing for all models just for illustration 
 test_pred_svm_lm <- predict(svm_lm_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_svm_lm, outcome_test_set)
+confusionMatrix(data=test_pred_svm_lm, reference=outcome_test_set)
 
 test_pred_svm_rbf <- predict(svm_rbf_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_svm_rbf, outcome_test_set)
+confusionMatrix(data=test_pred_svm_rbf, reference=outcome_test_set)
 
 test_pred_rpart <- predict(rpart_model, newdata=final_test_set)
 confusionMatrix(data=test_pred_rpart, outcome_test_set)
@@ -228,6 +221,15 @@ confusionMatrix(data=test_pred_rf, outcome_test_set)
 test_pred_lda <- predict(lda_model, newdata=final_test_set)
 confusionMatrix(data=test_pred_lda, outcome_test_set)
 
+test_pred_ridge <- predict(ridge_regression_model, newdata=final_test_set)
+confusionMatrix(data=test_pred_ridge, outcome_test_set)
+
+test_pred_lasso <- predict(lasso_model, newdata=final_test_set)
+confusionMatrix(data=test_pred_lasso, outcome_test_set)
+
+test_pred_elastic_net <- predict(elastic_net_model, newdata=final_test_set)
+confusionMatrix(data=test_pred_elastic_net, outcome_test_set)
+
 balanced_accuracy <- function(trained_model, test_features=final_test_set, test_outcomes=outcome_test_set){
   test_model <- predict(trained_model,test_features)
   test_score <- confusionMatrix(data=test_model, test_outcomes)
@@ -236,3 +238,54 @@ balanced_accuracy <- function(trained_model, test_features=final_test_set, test_
 
 lapply(training_models, balanced_accuracy)
 ```
+
+```{r}
+roc_curve <- function(test_predictions,colour=1,test_labels=outcome_test_set){
+  pred <- prediction(as.numeric(test_predictions), as.numeric(test_labels) )
+  perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+  plot(perf,col=colour)
+}
+
+roc_curve(test_pred_svm_rbf,colour=1)
+par(new = TRUE)
+roc_curve(test_pred_lda,colour=2)
+par(new = TRUE)
+roc_curve(test_pred_rf,colour=3)
+par(new = TRUE)
+roc_curve(test_pred_elastic_net,colour=4)
+par(new = TRUE)
+roc_curve(test_pred_gbm,colour=5)
+par(new = FALSE)
+legend("bottomright",c("svm radial kernel", "lda","random forest","elastic_net","graded boosting"), col = c(1:5),cex=0.8,lty=1)
+title(main="ROC curves for test data")
+
+# roc_curve(test_pred_svm_lm,colour=5)
+# par(new = TRUE)
+# roc_curve(test_pred_ridge,colour=6)
+# par(new = TRUE)
+# roc_curve(test_pred_lasso,colour=7)
+# par(new = TRUE)
+# roc_curve(test_pred_rpart,colour=8)
+# par(new = FALSE)
+# legend("bottomright",c("svm radial kernel", "lda","random forest","elastic_net","gbm","svm_lm","ridge","lasso","rpart"), col = c(2:9),cex=0.8,lty=1)
+```
+
+```{r: Variable Importance}
+varImp(svm_lm_model)
+plot(varImp(svm_lm_model))
+
+varImp(rf_model)
+plot(varImp(rf_model))
+
+set.seed(1)
+rpart_model2 <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "rpart") # without scaling n pca
+plot(varImp(rpart_model2))
+# plot classification trees
+fancyRpartPlot(rpart_model2$finalModel)
+plot(Chronic_Kidney_Disease2$class,Chronic_Kidney_Disease2$pcv,main="pcv")
+# summary(subset(Chronic_Kidney_Disease2,class=="ckd",pcv))
+# summary(subset(Chronic_Kidney_Disease2,class=="notckd",pcv))
+
+#lapply(training_models,varImp)
+```
+
