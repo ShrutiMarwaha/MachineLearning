@@ -239,6 +239,7 @@ balanced_accuracy <- function(trained_model, test_features=final_test_set, test_
 lapply(training_models, balanced_accuracy)
 ```
 
+**ROC CURVES**
 ```{r}
 roc_curve <- function(test_predictions,colour=1,test_labels=outcome_test_set){
   pred <- prediction(as.numeric(test_predictions), as.numeric(test_labels) )
@@ -270,6 +271,7 @@ title(main="ROC curves for test data")
 # legend("bottomright",c("svm radial kernel", "lda","random forest","elastic_net","gbm","svm_lm","ridge","lasso","rpart"), col = c(2:9),cex=0.8,lty=1)
 ```
 
+**Feature Importance**
 ```{r: Variable Importance}
 varImp(svm_lm_model)
 plot(varImp(svm_lm_model))
