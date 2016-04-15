@@ -73,6 +73,10 @@ train_control <- trainControl(method="cv", number=5, savePredictions = T)
 grid <- expand.grid(.fL=c(0), .usekernel=c(FALSE))
 
 # model building
+#multinomial regression
+set.seed(1)
+mn_model <- train(Species ~ .,data = training_set, trControl=train_control, method = "multinom",preProcess = c("center", "scale","pca"))
+
 # svm - linear
 set.seed(1)
 svm_lm_model <- train(Species ~ .,data = training_set, trControl=train_control, method = "svmLinear",preProcess = c("center", "scale","pca"))
@@ -94,7 +98,7 @@ fancyRpartPlot(rpart_model$finalModel)
 
 # random forest
 set.seed(1)
-rf_model <- train(Species ~ .,data = training_set, trControl=train_control, method = "rf",preProcess = c("center", "scale","pca"),prox=T)
+rf_model <- train(Species ~ .,data = training_set, trControl=train_control, method = "rf",preProcess = c("center", "scale"),prox=T)
 
 # boosting with tres
 set.seed(1)
@@ -109,7 +113,7 @@ set.seed(1)
 lda_model <- train(Species~., data=training_set, trControl=train_control, method="lda", preProcess = c("center", "scale","pca"))
 
 # collect resamples
-train_results <- resamples(list(SVM_LM=svm_lm_model,SVM_RBF=svm_rbf_model,RPART=rpart_model,GBM=gbm_model,RF=rf_model,NB=nb_model,LDA=lda_model))
+train_results <- resamples(list(MultinomialRegression=mn_model,SVM_LM=svm_lm_model,SVM_RBF=svm_rbf_model,RPART=rpart_model,GBM=gbm_model,RF=rf_model,NB=nb_model,LDA=lda_model))
 # summarize the distributions
 summary(train_results)
 # boxplots of results
@@ -120,6 +124,9 @@ bwplot(train_results)
 **EVALUATE MODEL ACCURACY ON TEST SET**
 ```{r}
 #Ideally, you select model that performs best on training data and evaluate on test set. I am doing for all models just for illustration 
+validation_pred_mn <- predict(mn_model, newdata=validation_set)
+confusionMatrix(data=validation_pred_mn, validation_set$Species)
+
 validation_pred_svm_lm <- predict(svm_lm_model, newdata=validation_set)
 confusionMatrix(data=validation_pred_svm_lm, validation_set$Species)
 
