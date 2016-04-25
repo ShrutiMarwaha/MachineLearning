@@ -58,7 +58,7 @@ table(dataset_dummy_variables$class.notckd) # 0 implies ckd; 1 implies notckd
 
 **split data**
 ```{r}
-set.seed(1)
+set.seed(123)
 training_index <- createDataPartition(dataset_dummy_variables$class.notckd,p=0.6,list=F)
 # column id of the outcome
 outcome_column_id <- grep("class.notckd",colnames(dataset_dummy_variables))
@@ -122,7 +122,7 @@ plot(pc,type="l")
 pc$rotation[order(-abs(pc$rotation[,"PC1"])),]
 
 par(xpd=TRUE)
-for(i in seq_along(colnames(final_training_set[,1:21])))
+for(i in seq_along(colnames(final_training_set)))
 {
   plot(outcome_training_set,final_training_set[,i],main=colnames(final_training_set)[i])
   legend(1.2,-6,c("0:ckd","1:notckd"),cex=0.8)
@@ -273,8 +273,16 @@ title(main="ROC curves for test data")
 
 **Feature Importance**
 ```{r: Variable Importance}
-varImp(svm_lm_model)
-plot(varImp(svm_lm_model))
+varImp(svm_rbf_model)
+plot(varImp(svm_rbf_model))
+
+ckd_training_set <- which(outcome_training_set==0)
+nonckd_training_set <- which(outcome_training_set==1)
+
+imp_features_svm <- (c("rbc.c","bu","sod","bgr","age"))
+sapply(imp_features_svm,function(i) {
+  t.test(final_training_set[ckd_training_set,i],final_training_set[nonckd_training_set,i])
+})
 
 varImp(rf_model)
 plot(varImp(rf_model))
@@ -290,4 +298,5 @@ plot(Chronic_Kidney_Disease2$class,Chronic_Kidney_Disease2$pcv,main="pcv")
 
 #lapply(training_models,varImp)
 ```
+
 
