@@ -1,0 +1,199 @@
+---
+title: "MachineLearning_ContinousData_Wages"
+author: "Shruti"
+date: "February 18, 2016"
+---
+Machine Learning - Continous Data example. Uses different machine learning algorithms to predict wage using multiple features.
+
+**Load Required Packages**
+```{r Chunk 1: load packages}
+library(caret)
+library(ISLR)
+library(ggplot2)
+# libraries for partition trees
+library(rpart)
+library(rpart.plot)
+library(rattle)
+```
+
+**split data**
+```{r Chunk 2: split data}
+data(Wage)
+dim(Wage)
+colnames(Wage)
+head(Wage)
+sapply(Wage[1,],class)
+# understand which factors should be modeled as numric and which as categorical data
+Wage$year <- as.factor(Wage$year)
+
+set.seed(1)
+training_indices <- createDataPartition(y=Wage$wage,p=0.8,list=F)
+# remove log-wage column as feature 
+training_set <- Wage[training_indices,-c(11)]
+test_set <- Wage[-training_indices,-c(11)]
+# dim(training_set); dim(test_set)
+```
+
+**exploratory data analysis**
+```{r}
+summary(Wage)
+# remove near zero covariates (features with no variability)
+nearZeroVar(training_set,saveMetrics = T)
+near_zero_covariates <- nearZeroVar(training_set)
+head(near_zero_covariates)
+if(length(near_zero_covariates)>0)
+{
+  training_set2 <- training_set[,-near_zero_covariates]
+  test_set2 <- test_set[,-near_zero_covariates]
+} else {
+  training_set2 <- training_set
+  test_set2 <- test_set
+}
+dim(training_set2); dim(test_set2)
+
+# exploratory plots
+colnames(training_set2)
+featurePlot(x=training_set2[1:8], y=training_set2$wage, plot="pairs")
+qplot(x=training_set2$year, y=training_set2$wage ,ylab="wage")
+qplot(x=training_set2$age, y=training_set2$wage ,ylab="wage")
+qplot(x=training_set2$age, y=training_set2$wage, color=training_set2$education,pch=training_set2$jobclass ,ylab="wage")
+# add regression smoother
+qq <- qplot(x=training_set2$age, y=training_set2$wage, color=training_set2$education,pch=training_set2$jobclass ,ylab="wage")
+qq + geom_smooth(method="lm",formula=y~x)
+
+qplot(x=training_set2$maritl, y=training_set2$wage ,ylab="wage", color=training_set2$age)
+qplot(x=training_set2$age, y=training_set2$wage, color=training_set2$maritl ,ylab="wage")
+
+qplot(x=training_set2$race,y=training_set2$wage,color=training_set2$education ,pch=training_set2$jobclass,cex=1,ylab="wage")
+qplot(x=training_set2$health,y=training_set2$wage,color=training_set2$health_ins ,pch=training_set2$jobclass,cex=1,ylab="wage")
+
+# correlated features
+# all features should be numeric to calculate correlation
+sapply(training_set2[1,],class)
+numeric_set <- which(sapply(training_set2[1,],class)=="integer")
+
+if (length(numeric_set)>1)
+{
+  feature_correlation <- cor(training_set2[,numeric_set])
+  # search through a correlation matrix and returns a vector of integers corresponding to columns to remove to reduce pair-wise correlations.
+  findCorrelation(feature_correlation,0.75,verbose=T,names=T)
+  high_correlation <- findCorrelation(feature_correlation,0.75,verbose=T,names=T)
+}else{high_correlation <- 0}
+
+high_correlation
+# grep(c(high_correlation[1]),colnames(training_set2))
+# grep(c(high_correlation[2]),colnames(training_set2))
+if(length(high_correlation)>0)
+{
+  training_set3 <- training_set2[,-c(11,15)]
+  test_set3 <- test_set2[,-c(11,15)]
+}else{
+  training_set3 <- training_set2
+  test_set3 <- test_set2
+}
+dim(training_set3); dim(test_set3)
+
+# PCA
+# pc <- prcomp(training_set3[,numeric_set],center=T,scale=T)
+# plot(pc,type="l")
+# pc$rotation[order(-abs(pc$rotation[,"PC1"])),]
+```
+
+**model building**
+```{r}
+# since many of the features are categorical, convert them into dummy varaibles
+dummy_variables_training <- dummyVars(~.,data=training_set3,fullRank=T)
+transformed_training_set <- data.frame(predict(dummy_variables_training, newdata=training_set3))
+head(transformed_training_set)
+dim(transformed_training_set)
+
+dummy_variables_test <- dummyVars(~.,data=test_set3,fullRank=T)
+transformed_test_set <- data.frame(predict(dummy_variables_test, newdata=test_set3))
+head(transformed_test_set)
+dim(transformed_test_set)
+
+# k-fold cross validation
+train_control <- trainControl(method="cv", number=10, savePredictions = T)
+# fix the parameters of the algorithm
+grid <- expand.grid(.fL=c(0), .usekernel=c(FALSE))
+
+# linear regression
+set.seed(1)
+lm_model <- train(y=transformed_training_set$wage, x=transformed_training_set[,-22], trControl=train_control, method="lm" ,preProcess=c("scale","center","pca")) 
+
+#lm_model
+summary(lm_model)
+# lm_model$finalModel
+
+# re-train model using features that look important
+set.seed(1)
+variable_imp <- varImp(train(y=transformed_training_set$wage, x=transformed_training_set[,-22], trControl=train_control, method="lm" ,preProcess=c("scale","center"))) # not including pca in preProcess as its difficult to interpret their importance in model
+plot(variable_imp)
+set.seed(1)
+lm_model2 <- train(y=transformed_training_set$wage, x=transformed_training_set[,c("education.5..Advanced.Degree","education.4..College.Grad","health._ins2..No","maritl.2..Married","education.3..Some.College","health.2....Very.Good")] ,trControl=train_control, method="lm",preProcess=c("scale","center","pca"))
+
+# tree / recursive partioning
+set.seed(1)
+rpart_model <- train(y=transformed_training_set$wage, x=transformed_training_set[,-22], trControl=train_control, method="rpart" ,preProcess=c("scale","center","pca"))
+# plot classification trees
+fancyRpartPlot(rpart_model$finalModel)
+
+# boosting with tres
+set.seed(1)
+gbm_model <- train(y=transformed_training_set$wage, x=transformed_training_set[,-22], trControl=train_control, method = "gbm", verbose=F ,preProcess=c("scale","center","pca"))
+summary(train(y=transformed_training_set$wage, x=transformed_training_set[,-22], trControl=train_control, method = "gbm", verbose=F ,preProcess=c("scale","center")))
+
+# random forest. this will take time for high "k" fold cv
+set.seed(1)
+rf_model <- train(y=transformed_training_set$wage, x=transformed_training_set[,-22], trControl=train_control, method="rf" ,preProcess=c("scale","center","pca"),importance = TRUE)
+
+# lasso - regularized regression
+set.seed(1)
+lasso_model <- train(y=transformed_training_set$wage, x=transformed_training_set[,-22], trControl=train_control, method="lasso", metric="RMSE" ,preProcess=c("scale","center","pca"))
+
+# collect resamples
+train_results <- resamples(list(LM=lm_model,LM2=lm_model2,RPART=rpart_model,GBM=gbm_model,RF=rf_model,LS=lasso_model))
+# summarize the distributions
+summary(train_results)
+# boxplots of results
+bwplot(train_results)
+# the above results suggest that GBM model performs best on the training data.
+```
+
+**EVALUATE MODEL ACCURACY ON TEST SET**
+```{r}
+#Ideally, you select model that performs best on training data and evaluate on test set. I am doing for all models just for illustration 
+colnames(transformed_test_set)
+par(mfrow=c(2,2))
+test_pred_lm <- predict(lm_model, newdata=transformed_test_set[,-22])
+R2(transformed_test_set$wage,test_pred_lm)
+RMSE(transformed_test_set$wage,test_pred_lm)
+plot(test_pred_lm,transformed_test_set$wage)
+
+test_pred_lm2 <- predict(lm_model2, newdata=transformed_test_set[,-22])
+R2(transformed_test_set$wage,test_pred_lm2)
+RMSE(transformed_test_set$wage,test_pred_lm2)
+plot(test_pred_lm2,transformed_test_set$wage)
+
+test_pred_rpart <- predict(rpart_model, newdata=transformed_test_set[,-22])
+R2(transformed_test_set$wage,test_pred_rpart)
+RMSE(transformed_test_set$wage,test_pred_rpart)
+plot(test_pred_rpart,transformed_test_set$wage)
+
+test_pred_gbm <- predict(gbm_model, newdata=transformed_test_set[,-22])
+R2(transformed_test_set$wage,test_pred_gbm)
+RMSE(transformed_test_set$wage,test_pred_gbm)
+plot(test_pred_gbm,transformed_test_set$wage)
+
+test_pred_rf <- predict(rf_model, newdata=transformed_test_set[,-22])
+R2(transformed_test_set$wage,test_pred_rf)
+RMSE(transformed_test_set$wage,test_pred_rf)
+plot(test_pred_rf,transformed_test_set$wage)
+
+test_pred_lasso <- predict(lasso_model, newdata=transformed_test_set[,-22])
+R2(transformed_test_set$wage,test_pred_lasso)
+RMSE(transformed_test_set$wage,test_pred_lasso)
+plot(test_pred_lasso,transformed_test_set$wage)
+```
+
+
