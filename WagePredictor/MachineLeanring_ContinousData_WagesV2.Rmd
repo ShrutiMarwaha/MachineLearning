@@ -3,7 +3,7 @@ title: "MachineLearning_ContinousData_Wages"
 author: "Shruti"
 date: "February 18, 2016"
 ---
-Machine Learning - Continous Data example. Uses different machine learning algorithms to predict wage using multiple features.
+Machine Learning - Continous Data example. Uses different machine learning algorithms to predict wage using multiple features.This code explicitly creates dummy variables from categorical features.
 
 **Load Required Packages**
 ```{r Chunk 1: load packages}
