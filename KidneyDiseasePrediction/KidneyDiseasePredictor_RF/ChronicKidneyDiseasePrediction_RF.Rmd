@@ -1,0 +1,265 @@
+---
+title: "ChronicKidneyDiseasePrediction_ML"
+author: "Shruti"
+date: "February 25, 2016"
+output: html_document
+---
+
+Machine Learning Classification Problem example. Uses different machine learning algorithms to classify patients with Chronic Kidney Disease or not based on 24 features. 
+https://archive.ics.uci.edu/ml/datasets/Chronic_Kidney_Disease
+
+**Load Required Packages**
+```{r}
+library(RWeka)
+library(caret)
+library(ROCR)
+```
+
+**load data** 
+```{r}
+## load data
+setwd("/Users/shruti/Desktop/WorkMiscellaneous/MachineLearning/UCI_ML/Chronic_Kidney_Disease")
+Chronic_Kidney_Disease <- read.arff("chronic_kidney_disease.arff")
+
+# data munging
+dim(Chronic_Kidney_Disease)
+head(Chronic_Kidney_Disease)
+colnames(Chronic_Kidney_Disease)
+summary(Chronic_Kidney_Disease)
+
+# % data missing in each column
+apply(Chronic_Kidney_Disease,2,function(i) {(sum(is.na(i))/nrow(Chronic_Kidney_Disease))*100})
+# samples with no missing data
+sum(complete.cases(Chronic_Kidney_Disease))
+# samples with no missing data after removing columns which have more than 25% of data missing
+sum(complete.cases(Chronic_Kidney_Disease[,-c(6,17,18)]))
+
+### remove rows with any missing value
+Chronic_Kidney_Disease2 <- Chronic_Kidney_Disease[complete.cases(Chronic_Kidney_Disease),]
+dim(Chronic_Kidney_Disease2)
+apply(Chronic_Kidney_Disease2[,c(3:9,19:25)],2,table)
+```
+
+**convert factor variables into dummy variables**
+```{r}
+# function to create dataset with dummy variables
+creat_dummy_var_data <- function(dataset){
+  dummy_variables <- dummyVars(~., data=dataset, fullRank=T)
+  dummy_var_data <- data.frame( predict(dummy_variables, newdata=dataset) )
+  return(dummy_var_data)
+}
+```
+
+**split data**
+```{r}
+create_training_test <- function(features_dataset,outcome_data,training_test_ratio){
+  training_index <- createDataPartition(outcome_data,p=training_test_ratio,list=F)
+  
+  training_set <- droplevels(features_dataset[training_index,])
+  test_set <- droplevels(features_dataset[-training_index,])
+  
+  # if you are trying to do classification using regression models, it is imp to use outcome as factor not numeric
+  outcome_training_set <- factor(outcome_data[training_index])
+  outcome_test_set <- factor(outcome_data[-training_index])
+  
+  return(list(training_features=training_set, test_features=test_set, training_outcome=outcome_training_set, test_outcome=outcome_test_set))
+}
+```
+
+**Data Pre-processing**
+```{r}
+remove_nonvaring_collinear_features <- function(training_data,test_data,corr_theshold=0.75){
+  # remove zero covaritates (features with NO VARIABILITY)
+  #nearZeroVar(training_data,saveMetrics = T)
+  near_zero_covariates <- colnames(training_data)[nearZeroVar(training_data)]
+  
+  if(length(near_zero_covariates)>0)
+  {
+    # find column indices of the near_zero_covariates
+    nzc_indices_training <- sapply(near_zero_covariates,function(i) {grep(i,colnames(training_data))})
+    training_data_nzc <- training_data[,-nzc_indices_training]
+    
+    nzc_indices_test <- sapply(near_zero_covariates,function(i) {grep(i,colnames(test_data))})  
+    test_data_nzc <- test_data[,-nzc_indices_test]
+  } else {
+    training_data_nzc <- training_data
+    test_data_nzc <- test_data
+  }
+
+  # CORRELATED features
+  feature_correlation <- cor(training_data_nzc)
+  # search through a correlation matrix and returns a vector of integers corresponding to     columns to remove to reduce pair-wise correlations.
+  high_correlation <- findCorrelation(feature_correlation,corr_theshold,verbose=F,names=T)
+
+  if(length(high_correlation)>0)
+  {
+    correlated_indices_training <- sapply( high_correlation,function(i) {grep(i,colnames(training_data_nzc))} )
+    final_training_data <- training_data_nzc[,-correlated_indices_training]
+    
+    correlated_indices_test <- sapply( high_correlation,function(i) {grep(i,colnames(test_data_nzc))} )
+    final_test_data <- test_data_nzc[,-correlated_indices_test]
+  }else{
+    final_training_data <- training_data_nzc
+    final_test_data <- test_data_nzc
+  }
+  
+  return(list(processed_training_set=final_training_data, processed_test_set=final_test_data))
+}
+```
+
+```{r: Run the above functions to create model}
+sapply(Chronic_Kidney_Disease2[1,],class)
+# since many of the features are categorical, convert them into dummy varaibles except the outcome. 
+outcome_column_id <- grep("class",colnames(Chronic_Kidney_Disease2))
+dataset_dummy_variables <- creat_dummy_var_data(Chronic_Kidney_Disease2[,-outcome_column_id])
+
+# split data
+# IMPORTANT NOTE: the class of column used for creating DataPartion is very important. Same variable can give different training_index depending on whether it is numeric or factor.
+set.seed(123)
+split_data <- create_training_test(dataset_dummy_variables,Chronic_Kidney_Disease2$class,0.6)
+lapply(split_data,head)
+lapply(split_data[1:2],dim)
+
+# data preprocessing
+processed_data <- remove_nonvaring_collinear_features(split_data$training_features,split_data$test_features,0.75)
+#lapply(processed_data,head)
+lapply(processed_data,dim)
+
+final_training_set <- processed_data$processed_training_set
+final_test_set <- processed_data$processed_test_set
+dim(final_training_set); dim(final_test_set)
+
+training_output <- split_data$training_outcome
+test_output <- split_data$test_outcome
+length(training_output); length(test_output)
+```
+
+**exploratory data analysis**
+```{r:plots}
+# PCA
+pc <- prcomp(final_training_set,center=T,scale=T)
+plot(pc,type="l",lab=c(10,10,12))
+#pc$rotation[order(-abs(pc$rotation[,"PC1"])),]
+
+par(xpd=TRUE)
+for(i in seq_along(colnames(final_training_set)))
+{
+  plot(training_output,final_training_set[,i],main=colnames(final_training_set)[i])
+  legend(1.2,-6,c("0:ckd","1:notckd"),cex=0.8)
+}
+```
+
+**model building**
+```{r: }
+# k-fold cross validation
+train_control <- trainControl(method="cv", number=5, savePredictions = T,classProbs =  TRUE)
+
+# svm - random forest
+set.seed(1)
+rf_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "rf",prox=T,preProcess = c("center", "scale"))
+```
+
+**EVALUATE MODEL ACCURACY ON TEST SET**
+```{r}
+test_pred_rf <- predict(rf_model, newdata=final_test_set)
+confusionMatrix(data=test_pred_rf, reference=test_output)
+# svm results as probability
+test_pred_rf_prob <- predict(rf_model, newdata=final_test_set, type = "prob")
+```
+
+**Feature Importance**
+```{r: Variable Importance}
+varImp(rf_model)
+plot(varImp(rf_model))
+
+# verify the important features using t-test 
+ckd_training_set <- which(training_output=="ckd")
+nonckd_training_set <- which(training_output=="notckd")
+
+imp_features_svm <- c("rbc.c","bu","sod","dm.no","age","pe.no")
+sapply(imp_features_svm,function(i) {
+  t.test(final_training_set[ckd_training_set,i],final_training_set[nonckd_training_set,i])
+})
+```
+
+```{r: smaller model with most important features}
+svm_variable_imp <- varImp(rf_model)$importance
+svm_variable_imp2 <- subset(svm_variable_imp,Overall>=50,)
+svm_imp_features <- rownames(svm_variable_imp2)
+# not including random blood glucose (bgr) as its very similar to diabetes (dm)
+svm_imp_features <- svm_imp_features[-grep("bgr",svm_imp_features)]
+#svm_imp_features <- c("rbc.c","bu","sod","pc.abnormal","dm.no","sg.1.010","sg.1.020","sg.1.025","age","pe.no","bp")
+
+set.seed(1)
+rf_smallmodel <- train(y=training_output, x=final_training_set[,svm_imp_features], trControl=train_control, method = "svmRadial", tuneLegth=5, preProcess = c("center", "scale","pca"))
+save(rf_smallmodel,file="/Users/shruti/Desktop/WorkMiscellaneous/MachineLearning/ChronicKidneyDisease/app/rf_smallmodel.rda")
+saveRDS(rf_smallmodel,file="/Users/shruti/Desktop/WorkMiscellaneous/MachineLearning/ChronicKidneyDisease/app/rf_smallmodel.rds")
+```
+
+```{r: TESTING}
+chronicKidneyDiseaseRisk <- function(rbc_count,bu,sod,pc,dm,age,sg,pe,wbcc,cad,ba,bp) {
+  
+  input_df <- data.frame(matrix(data=NA,nrow=1,ncol=length(svm_imp_features),dimnames=list(c(),svm_imp_features )))
+  
+  input_df$age <- age
+  input_df$rbc.c <- rbc_count
+  input_df$bu <- bu
+  input_df$sod <- sod
+  input_df$wbcc <- wbcc
+  input_df$bp <- bp
+  input_df$dm.no <- as.numeric(!dm) # dm.no=1 means no diabetes 
+  input_df$pc.abnormal <- as.numeric(pc)  # pc.abnormal=1 means Abnormal Pus Cells
+  input_df$pe.no <- as.numeric(!pe) # pe.no=1 means Pedal Anemia is true
+  input_df$ba.notpresent <- as.numeric(!ba)
+  input_df$cad.no <- as.numeric(!cad)
+  
+  if(sg==1.010)
+  {
+    input_df$sg.1.010 <- 1
+    #input_df$sg.1.015 <- 0
+    input_df$sg.1.020 <- 0
+    input_df$sg.1.025 <- 0
+  }
+  else if(sg==1.015)
+  {
+    input_df$sg.1.010 <- 0
+    #input_df$sg.1.015 <- 1
+    input_df$sg.1.020 <- 0
+    input_df$sg.1.025 <- 0
+  }
+  else if(sg==1.020)
+  {
+    input_df$sg.1.010 <- 0
+    #input_df$sg.1.015 <- 0
+    input_df$sg.1.020 <- 1
+    input_df$sg.1.025 <- 0
+  }
+  else if(sg==1.025)
+  {
+    input_df$sg.1.010 <- 0
+    #input_df$sg.1.015 <- 0
+    input_df$sg.1.020 <- 0
+    input_df$sg.1.025 <- 1
+  }
+  
+  return(input_df)
+}
+
+final_test_set[c(1,46),svm_imp_features]
+test_output[c(1,46)]
+
+x <- chronicKidneyDiseaseRisk(3.7,107,114,TRUE,TRUE,53,1.020,FALSE,12100,FALSE,FALSE,70)
+predict(rf_smallmodel, newdata=final_test_set[1,svm_imp_features], type = "prob")
+predict(rf_smallmodel, newdata=x)
+
+y <- chronicKidneyDiseaseRisk(6.1,38,144,FALSE,FALSE,34,1.025,FALSE,7400,FALSE,FALSE,60)
+predict(rf_smallmodel, newdata=final_test_set[46,svm_imp_features], type = "prob")
+predict(rf_smallmodel, newdata=y)
+```
+
+
+
+
+
+
+
