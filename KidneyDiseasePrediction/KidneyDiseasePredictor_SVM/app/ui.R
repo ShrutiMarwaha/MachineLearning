@@ -3,6 +3,7 @@ shinyUI(fluidPage(
   # Application title
   titlePanel("Chronic Kidney Disease Prediction Tool"),
   
+  # Application Description
   fluidRow(
           column(12, 
                  h4(
@@ -15,13 +16,14 @@ shinyUI(fluidPage(
   fluidRow(
           column(4,
                   wellPanel(
-                            h4("Blood & Urine Tests",style = "color: blue; font-family: 'times'; font-size:14pt;"),
+                            h4("Blood Tests",style = "color: blue; font-family: 'times'; font-size:14pt;"),
                             numericInput("rbc_count", "Red Blood Cell Count (millions/cmm)", 5, min = 0, max = 20, step = 0.1),
                             numericInput("bu", "Blood Urea (mgs/dl)", 30, min = 1, max = 500, step = 1),
                             numericInput("sod", "Blood Sodium (mEq/L)", 145, min = 100, max = 200, step = 1),
+                            
+                            h4("Urine Tests",style = "color: blue; font-family: 'times'; font-size:14pt;"),      
                             numericInput("sg", "Urinary specific gravity", 1.02, min = 1.010, max = 1.025, step = 0.005) ,
-
-                            h4("Pus Cells",style="font-size:11pt"),
+                            #h4("Pus Cells",style="font-size:11pt"),
                             checkboxInput("pc", label = "Abnormal Pus Cells", value = FALSE)
                           ) 
                   ),
