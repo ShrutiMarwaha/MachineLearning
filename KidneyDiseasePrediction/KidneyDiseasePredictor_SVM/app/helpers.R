@@ -1,6 +1,6 @@
+# function to convert users input from app to matrix that can be fed to machine learning model
 svm_imp_features <- c("rbc.c","bu","sod","pc.abnormal","dm.no","sg.1.010","sg.1.020","sg.1.025","age","pe.no","bp")
 
-# function to convert users input from app to matrix that can be fed to machine learning model
 create_input_matrix <- function(rbc_count,bu,sod,pc,dm,age,sg,pe,bp) {
   input_df <- data.frame(matrix(data=NA,nrow=1,ncol=length(svm_imp_features),dimnames=list(c(),svm_imp_features)))
   
