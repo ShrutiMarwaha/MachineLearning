@@ -1,15 +1,17 @@
 library(caret)
+library(kernlab)
 library(shiny)
 ########################
 
-#load("/Users/shruti/Desktop/WorkMiscellaneous/MachineLearning/ChronicKidneyDisease/app/svm_rbf_smallmodel.rda")
-svm_rbf_smallmodel <- readRDS("/Users/shruti/Desktop/WorkMiscellaneous/MachineLearning/ChronicKidneyDisease/app/svm_rbf_smallmodel.rds")
-svm_imp_features2 <- c("rbc.c","bu","sod","pc.abnormal","dm.no","sg.1.010","sg.1.020","sg.1.025","age","pe.no","wbcc","cad.no","ba.notpresent","bp")
 source("helpers.R")
+# It is important to store the rds file in same folder as ui and server files and do not provide complete path
+svm_rbf_smallmodel <- readRDS("svm_rbf_smallmodel.rds")
+print("loaded model file")
 ########################
 
 shinyServer(
-  function(input, output) {
+  function(input, output) 
+  {
     output$inputValue <- renderPrint({input$rbc_count})
     output$inputValue <- renderPrint({input$bu})
     output$inputValue <- renderPrint({input$sod})
@@ -18,12 +20,11 @@ shinyServer(
     output$inputValue <- renderPrint({input$age})
     output$inputValue <- renderPrint({input$sg})
     output$inputValue <- renderPrint({input$pe})
-    output$inputValue <- renderPrint({input$wbc_count})
-    output$inputValue <- renderPrint({input$cad})
-    output$inputValue <- renderPrint({input$ba})
     output$inputValue <- renderPrint({input$bp})
-    output$user_input <- renderTable({create_input_matrix(input$rbc_count,input$bu,input$sod,input$pc,input$dm,input$age,input$sg,input$pe,input$wbc_count,input$cad,input$ba,input$bp)})
-    output$prediction <- renderPrint({chronicKidneyDiseaseRisk(input$rbc_count,input$bu,input$sod,input$pc,input$dm,input$age,input$sg,input$pe,input$wbc_count,input$cad,input$ba,input$bp)})
     
+    # build the input dataframe for model
+    output$user_input <- renderTable({create_input_matrix(input$rbc_count,input$bu,input$sod,input$pc,input$dm,input$age,input$sg,input$pe,input$bp)})
+    # predict the risk using the model
+    output$prediction <- renderPrint({chronicKidneyDiseaseRisk(svm_rbf_smallmodel,input$rbc_count,input$bu,input$sod,input$pc,input$dm,input$age,input$sg,input$pe,input$bp)})   
   }
 )
