@@ -15,7 +15,7 @@ library(caret)
 library(ROCR)
 ```
 
-**load data** 
+**Load data** 
 ```{r}
 ## load data
 setwd("/Users/shruti/Desktop/WorkMiscellaneous/MachineLearning/UCI_ML/Chronic_Kidney_Disease")
@@ -40,7 +40,7 @@ dim(Chronic_Kidney_Disease2)
 apply(Chronic_Kidney_Disease2[,c(3:9,19:25)],2,table)
 ```
 
-**convert factor variables into dummy variables**
+**Convert factor variables into dummy variables**
 ```{r}
 # function to create dataset with dummy variables
 creat_dummy_var_data <- function(dataset){
@@ -50,7 +50,7 @@ creat_dummy_var_data <- function(dataset){
 }
 ```
 
-**split data**
+**Split data into Training and Test**
 ```{r}
 create_training_test <- function(features_dataset,outcome_data,training_test_ratio){
   training_index <- createDataPartition(outcome_data,p=training_test_ratio,list=F)
@@ -107,6 +107,7 @@ remove_nonvaring_collinear_features <- function(training_data,test_data,corr_the
 }
 ```
 
+**Execution**
 ```{r: Run the above functions to create model}
 sapply(Chronic_Kidney_Disease2[1,],class)
 # since many of the features are categorical, convert them into dummy varaibles except the outcome. 
@@ -133,7 +134,7 @@ test_output <- split_data$test_outcome
 length(training_output); length(test_output)
 ```
 
-**exploratory data analysis**
+**Exploratory data analysis**
 ```{r:plots}
 # PCA
 pc <- prcomp(final_training_set,center=T,scale=T)
@@ -148,7 +149,7 @@ for(i in seq_along(colnames(final_training_set)))
 }
 ```
 
-**model building**
+**Model building**
 ```{r: }
 # k-fold cross validation
 train_control <- trainControl(method="cv", number=5, savePredictions = T,classProbs =  TRUE)
@@ -158,7 +159,7 @@ set.seed(1)
 svm_rbf_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "svmRadial", tuneLegth=5, preProcess = c("center", "scale","pca"))
 ```
 
-**EVALUATE MODEL ACCURACY ON TEST SET**
+**Evaluate Model Accuracy on Test Data**
 ```{r}
 test_pred_svm_rbf <- predict(svm_rbf_model, newdata=final_test_set)
 confusionMatrix(data=test_pred_svm_rbf, reference=test_output)
