@@ -52,9 +52,3 @@ chronicKidneyDiseaseRisk <- function(svm_rbf_smallmodel, rbc_count,bu,sod,pc,dm,
   return(prediction$ckd)
 }
 
-# To deploy app
-# setwd("/Users/shruti/Dropbox/SHRUTIM/Rscripts/MachineLearning/KidneyDiseasePrediction/KidneyDiseasePredictor_SVM/app")
-# library(shinyapps)
-# authorized to your accountby going to https://www.shinyapps.io/admin/#/tokens. click show 
-# setAccountInfo(name='shruti-marwaha', token='5CE2F264C65E9C22C7812E2C0BB7467E', secret='IFvw73TseKuNan+P3bbEw4mRJUYszuPZRpZQW4g4')
-# deployApp(appName="KidneyDiseasePredictor")
