@@ -2,6 +2,7 @@ library(caret)
 library(ggplot2)
 library(lubridate) # to extract date, month etc
 library(ggmap) # to get zipcode from longitude and latitude
+library(dplyr)
 
 ################################# Data Munging #################################
 # load data
@@ -70,16 +71,148 @@ training_features <- cbind( FeatureExtraction(train_data),zip=zip_codes_training
 test_features <- FeatureExtraction(test_data,zip=zip_codes_test)
 # save(training_features,file="./training_features.rda")
 # save(test_features,file="./test_features.rda")
-sapply(training_features[1,],class)
+load("./training_features.rda")
+
+# Split Data
+set.seed(123)
+training_index <- createDataPartition(training_features$Category,p=0.6,list=F)
+training_set <- droplevels(training_features[training_index,])
+test_set <- droplevels(training_features[-training_index,])
+dim(training_set); dim(test_set)
+
+# exploratory analysis
+sapply(training_set[1,],class)
+head(training_set)
+
+# barplot(prop.table(table(training_set$hour_of_crime)))
+# barplot(table(training_set$Category),horiz=T)
+
+
+
+# Types of crimes.
+Category_hist <- training_set %>%
+  group_by(Category) %>%
+  summarise(count = n()) %>%
+  transform(Category = reorder(Category,-count))
+head(Category_hist)
+Category_hist <- arrange(Category_hist, desc(count))
+top10_crimes <- Category_hist[1:10,1]
+
+ggplot(Category_hist) + 
+  geom_bar(aes(x=Category, y=count,
+        color = Category, fill = Category),
+        stat="identity")+
+        coord_flip()+
+        theme(legend.position="None")+
+        ggtitle("Number of crimes in each category")+
+        xlab("Number of crimes")+
+        ylab("Category of crime")
+
+# Variations in top 10 crimes by year
+data_plot <- training_set %>%
+  subset(Category %in% top10_crimes) %>%
+  group_by(year_of_crime,Category,month_of_crime) %>%
+  summarise(count = n())
+data_plot$Category = factor(data_plot$Category,levels = top10_crimes)
+head(data_plot)
+
+ggplot(data = data_plot,aes(x=year_of_crime, y=count,fill = Category)) +
+  geom_boxplot() +
+    facet_wrap(~Category,ncol = 5)+
+    theme(legend.position="None",
+    axis.text.x = element_text(angle = 90, hjust = 1)) +
+    xlab("Year")+
+    ylab("Number of crime incidents")+
+    ggtitle("Variations in crime by year")+
+    xlab("Number of crimes")+
+    ylab("Year")
+
+## Variation with day of week
+data_day <- training_set %>%
+  group_by(DayOfWeek,year_of_crime,month_of_crime) %>%
+  summarise(count = n())
+head(data_day)
+
+boxplot(data_day$count~data_day$DayOfWeek,
+        col=seq(along=(levels(data_day$DayOfWeek))), 
+        ylim = c(min(data_day$count),max(data_day$count)),
+        main = c("Variation with day of week"),
+        ylab=c("Number of crimes"),
+        axes=F)
+axis(2, seq(100,1100, 100), seq(100,1100, 100))
+axis(1, 1:7, levels(data_day$DayOfWeek), las=2)
+
+# Variation in crime with year
+data_year <- training_set %>%
+  group_by(year_of_crime,month_of_crime) %>%
+  summarise(count = n())
+head(data_year)
+
+boxplot(data_year$count~data_year$year_of_crime,
+        col=seq(along=(levels(data_year$year_of_crime))),
+        #ylim = c(min(data_year$count),max(data_year$count)),
+        ylim = c(2000,5000),
+        main = c("Variation in crime with year"),
+        ylab=c("Number of crimes"),
+        axes=F)
+axis(2, seq(2000,5000, 1000), seq(2000,5000, 1000))
+axis(1, 1:13, levels(data_day$year_of_crime), las=2)
+
+# Variation in crime with month
+data_month <- training_set %>%
+  group_by(month_of_crime,year_of_crime) %>%
+  summarise(count = n())
+head(data_month)
+
+boxplot(data_month$count ~data_month$month_of_crime,
+        col=seq(along=(levels(data_day_year_month$month_of_crime))),
+        ylim = c(2000,5000),
+        main = c("Variation in crime with month"),
+        ylab=c("Number of crimes"),
+        axes=F)
+axis(2, seq(2000,5000, 1000), seq(2000,5000, 1000))
+axis(1, 1:12, levels(data_month$month_of_crime), las=2)
+
+### NOW DO IT FOR HOUR OF DAY
+
+### ALSO PLOT THESE TRENDS FOR EACH CRIME ON TOP OF ONE ANOTHER...LINE GRAPH
+
+#################################
+# Better plots
+# Crime vs DayOfWeek
+data_plot <- training_set %>%
+  group_by(DayOfWeek,year_of_crime,month_of_crime) %>%
+  summarise(count = n())
+
+p1 = ggplot(data = data_plot,aes(x=DayOfWeek, y=count,fill = DayOfWeek)) + 
+  geom_boxplot() + 
+  theme(legend.position="None") +
+  xlab("Day of week")+
+  ylab("Number of crime incidents")+
+  coord_cartesian(ylim = c(300,1200))
+
+# Crime vs month
+data_plot = training_set %>%
+  group_by(month_of_crime,year_of_crime,month_of_crime) %>%
+  summarise(count = n()) 
+head(data_plot)
+
+p2 = ggplot(data = data_plot,aes(x=month_of_crime, y=count,fill = month_of_crime)) + 
+  geom_boxplot() + 
+  xlab("Month")+
+  ylab("Number of crime incidents")+
+  theme(legend.position="None") +
+  scale_x_continuous(breaks = 1:12, labels=month_of_crime)
+
 
 ################################# Modeling #################################
 # TO DO: create dummy variables
 
 # Data Partition
 set.seed(1)
-training_indices <- createDataPartition(y=training_features$Category,p=0.6,list=F)
-training_set <- training_features[training_indices,]
-test_set <- training_features[-training_indices,]
+training_indices <- createDataPartition(y=training_set$Category,p=0.6,list=F)
+training_set <- training_set[training_indices,]
+test_set <- training_set[-training_indices,]
 # dim(training_set); dim(test_set)
 write.table(training_set,file="./training_set.txt")
 
@@ -123,8 +256,8 @@ confusionMatrix(data=test_pred_rpart, test_set$Category)
 ######################
 # work on smaller data
 set.seed(1)
-sample_indices <- sample(1:nrow(training_features),10000)
-sample_data <- droplevels(training_features[sample_indices,])
+sample_indices <- sample(1:nrow(training_set),10000)
+sample_data <- droplevels(training_set[sample_indices,])
 summary(sample_data)
 head(sample_data)
 sort(table(sample_data$Category))
