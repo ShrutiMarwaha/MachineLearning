@@ -84,10 +84,8 @@ dim(training_set); dim(test_set)
 sapply(training_set[1,],class)
 head(training_set)
 
-# barplot(prop.table(table(training_set$hour_of_crime)))
+# barplot((table(training_set$hour_of_crime)))
 # barplot(table(training_set$Category),horiz=T)
-
-
 
 # Types of crimes.
 Category_hist <- training_set %>%
@@ -173,7 +171,36 @@ boxplot(data_month$count ~data_month$month_of_crime,
 axis(2, seq(2000,5000, 1000), seq(2000,5000, 1000))
 axis(1, 1:12, levels(data_month$month_of_crime), las=2)
 
-### NOW DO IT FOR HOUR OF DAY
+### Variation in crime with hour of day
+data_hour <- training_set %>%
+  group_by(hour_of_crime,year_of_crime,month_of_crime) %>%
+  summarise(count = n())
+head(data_hour)
+
+boxplot(data_hour$count~data_hour$hour_of_crime,
+        col=seq(along=(levels(data_hour$hour_of_crime))), 
+        ylim = c(min(data_hour$count),max(data_hour$count)),
+        main = c("Variation with hour"),
+        ylab=c("Number of crimes"),
+        axes=F)
+axis(2, seq(0,500, 100), seq(0,500, 100))
+axis(1, 0:23, levels(data_hour$hour_of_crime), las=2)
+
+## Variation in crime with zipcode
+data_zip <- training_set %>%
+  group_by(zip,year_of_crime) %>%
+  summarise(count = n())
+head(data_zip)
+
+boxplot(data_zip$count ~data_zip$zip,
+        col=seq(along=(levels(data_zip$zip))),
+        ylim = c(min(data_zip$count),max(data_zip$count)),
+        main = c("Variation in crime with zip"),
+        ylab=c("Number of crimes"),
+        axes=F)
+axis(2, seq(0,6000, 1000), seq(0,6000, 1000))
+axis(1, seq(1,29,1), levels(data_zip$zip), las=2, cex.axis=0.8)
+
 
 ### ALSO PLOT THESE TRENDS FOR EACH CRIME ON TOP OF ONE ANOTHER...LINE GRAPH
 
