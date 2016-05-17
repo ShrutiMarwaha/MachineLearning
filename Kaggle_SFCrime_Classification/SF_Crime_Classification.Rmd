@@ -1,0 +1,219 @@
+---
+title: "SF_Crime_Classification"
+author: "Shruti"
+date: "May 17, 2016"
+output: html_document
+---
+
+Kaggle Challenge to classify 39 different crimes that occurred in SF in 12 years. https://www.kaggle.com/c/sf-crime
+
+**Load Required Packages**
+```{r}
+library(caret)
+library(ggplot2)
+library(lubridate) # to extract date, month etc
+library(ggmap) # to get zipcode from longitude and latitude
+library(dplyr)
+```
+
+**load data** 
+```{r}
+# load data
+setwd("/Users/shruti/Desktop/WorkMiscellaneous/MachineLearning/SanFranciscoCrime/")
+train_data <- read.csv("./train.csv") 
+#test_data <- read.csv("./test.csv") 
+
+# data exploration
+dim(train_data)
+head(train_data)
+summary(train_data)
+levels(train_data$Category)
+table(train_data$Category)
+# missing data
+sum(!complete.cases(train_data))
+```
+
+**Data Munging**
+```{r}
+# function for Feature Extraction
+FeatureExtraction <- function(dataset,zip){
+  year_of_crime <- as.factor(year(dataset$Dates))
+  month_of_crime <- as.factor(month(dataset$Dates))
+  date_of_crime <- as.factor(day(dataset$Dates))
+  hour_of_crime <- as.factor(hour(dataset$Dates))
+  new_dataframe <- data.frame(cbind(hour_of_crime,date_of_crime,month_of_crime,year_of_crime,droplevels(dataset[,c("DayOfWeek","PdDistrict","X","Y")])))
+  
+  return(new_dataframe)
+}
+
+# Feature engineering: get zip code from latitude and longitude
+# install.packages("zipcode")
+library(zipcode)
+data(zipcode)
+sf_zipcodes <- subset(zipcode,city=="San Francisco",)
+sf_zipcodes$latitude <- as.numeric(format(sf_zipcodes$latitude,digits=8))
+sf_zipcodes$longitude <- as.numeric(format(sf_zipcodes$longitude,digits=8))
+dim(sf_zipcodes)
+head(sf_zipcodes)
+
+# function to convert latitude and longitude to zipcode
+closest_zipcode <- function(latitude_longitude_matrix)   
+# latitude_longitude_matrix : input matrix containing latitude and longitude from training or test set
+{
+  # find euclidean distance between user provided latitude and longitude and 
+  # all latitudes, longitudes from sf_zipcodes and select the row from latter 
+  # which has minimum distance. then extract its zip code
+  return(sf_zipcodes[which.min 
+                     (apply (sf_zipcodes[,c("latitude","longitude")],1,function(i) 
+                       {
+                          dist( rbind(i,latitude_longitude_matrix) ) #euclidean distance
+                        }   ) 
+                      ),"zip"])
+}
+
+# Sanity Check: to validate some of the zipcodes with google api
+train_data[1,]
+closest_zipcode(c(train_data$Y[1],train_data$X[1]))
+revgeocode(c(train_data$X[1], train_data$Y[1]))
+
+# zip_codes_training <- apply(train_data[,c("Y","X")],1,closest_zipcode)
+# save(zip_codes_training,file="zip_codes_training.rda")
+load("./zip_codes_training.rda")
+
+# zip_codes_test <- apply(test_data[,c("Y","X")],1,closest_zipcode)
+# save(zip_codes_test,file="zip_codes_test.rda")
+#load("./zip_codes_test.rda")
+
+# combining new features
+training_features <- cbind( FeatureExtraction(train_data),zip=zip_codes_training, Category=train_data$Category )
+#test_features <- FeatureExtraction(test_data,zip=zip_codes_test)
+# save(training_features,file="./training_features.rda")
+# save(test_features,file="./test_features.rda")
+# load("./training_features.rda")
+head(training_features)
+```
+
+**split data**
+```{r}
+set.seed(123)
+training_index <- createDataPartition(training_features$Category,p=0.6,list=F)
+training_set <- droplevels(training_features[training_index,])
+test_set <- droplevels(training_features[-training_index,])
+dim(training_set); dim(test_set)
+```
+
+**exploratory data analysis**
+```{r}
+# Frequency/historgram of different crimes.
+Category_hist <- training_set %>%
+  group_by(Category) %>%
+  summarise(count = n()) %>%
+  transform(Category = reorder(Category,-count))
+head(Category_hist)
+Category_hist <- arrange(Category_hist, desc(count))
+top10_crimes <- Category_hist[1:10,1]
+
+ggplot(Category_hist) + 
+  geom_bar(aes(x=Category, y=count,
+        color = Category, fill = Category),
+        stat="identity")+
+        coord_flip()+
+        theme(legend.position="None")+
+        ggtitle("Number of crimes in each category")+
+        xlab("Number of crimes")+
+        ylab("Category of crime")
+
+# Variations in top 10 crimes by year
+data_plot <- training_set %>%
+  subset(Category %in% top10_crimes) %>%
+  group_by(year_of_crime,Category,month_of_crime) %>%
+  summarise(count = n())
+data_plot$Category = factor(data_plot$Category,levels = top10_crimes)
+head(data_plot)
+
+ggplot(data = data_plot,aes(x=year_of_crime, y=count,fill = Category)) +
+  geom_boxplot() +
+    facet_wrap(~Category,ncol = 5)+
+    theme(legend.position="None",
+    axis.text.x = element_text(angle = 90, hjust = 1)) +
+    xlab("Year")+
+    ylab("Number of crime incidents")+
+    ggtitle("Variations in crime by year")+
+    xlab("Number of crimes")+
+    ylab("Year")
+
+## Variation with day of week
+data_day <- training_set %>%
+  group_by(DayOfWeek,year_of_crime,month_of_crime) %>%
+  summarise(count = n())
+head(data_day)
+
+boxplot(data_day$count~data_day$DayOfWeek,
+        col=seq(along=(levels(data_day$DayOfWeek))), 
+        ylim = c(min(data_day$count),max(data_day$count)),
+        main = c("Variation with day of week"),
+        ylab=c("Number of crimes"),
+        axes=F)
+axis(2, seq(100,1100, 100), seq(100,1100, 100))
+axis(1, 1:7, levels(data_day$DayOfWeek), las=2)
+# the graph indicates that maximum crimes occur on Friday and minimum on sunday
+
+# Variation in crime with year
+data_year <- training_set %>%
+  group_by(year_of_crime,month_of_crime) %>%
+  summarise(count = n())
+
+boxplot(data_year$count~data_year$year_of_crime,
+        col=seq(along=(levels(data_year$year_of_crime))),
+        #ylim = c(min(data_year$count),max(data_year$count)),
+        ylim = c(2000,5000),
+        main = c("Variation in crime with year"),
+        ylab=c("Number of crimes"),
+        axes=F)
+axis(2, seq(2000,5000, 1000), seq(2000,5000, 1000))
+axis(1, 1:13, levels(data_day$year_of_crime), las=2)
+
+# Variation in crime with month
+data_month <- training_set %>%
+  group_by(month_of_crime,year_of_crime) %>%
+  summarise(count = n())
+
+boxplot(data_month$count ~data_month$month_of_crime,
+        col=seq(along=(levels(data_month$month_of_crime))),
+        ylim = c(2000,5000),
+        main = c("Variation in crime with month"),
+        ylab=c("Number of crimes"),
+        axes=F)
+axis(2, seq(2000,5000, 1000), seq(2000,5000, 1000))
+axis(1, 1:12, levels(data_month$month_of_crime), las=2)
+# the graph indicates that maximum crimes occur in October and least in Dec
+
+### Variation in crime with hour of day
+data_hour <- training_set %>%
+  group_by(hour_of_crime,year_of_crime,month_of_crime) %>%
+  summarise(count = n())
+
+boxplot(data_hour$count~data_hour$hour_of_crime,
+        col=seq(along=(levels(data_hour$hour_of_crime))), 
+        ylim = c(min(data_hour$count),max(data_hour$count)),
+        main = c("Variation with hour"),
+        ylab=c("Number of crimes"),
+        axes=F)
+axis(2, seq(0,500, 100), seq(0,500, 100))
+axis(1, 0:23, levels(data_hour$hour_of_crime), las=2)
+
+## Variation in crime with zipcode
+data_zip <- training_set %>%
+  group_by(zip,year_of_crime,month_of_crime) %>%
+  summarise(count = n())
+
+boxplot(data_zip$count ~data_zip$zip,
+        col=seq(along=(levels(data_zip$zip))),
+        ylim = c(min(data_zip$count),max(data_zip$count)),
+        main = c("Variation in crime with zip"),
+        ylab=c("Number of crimes"),
+        axes=F)
+axis(2, seq(0,1000, 100), seq(0,1000, 100))
+axis(1, seq(1,29,1), levels(data_zip$zip), las=2, cex.axis=0.8)
+```
+
