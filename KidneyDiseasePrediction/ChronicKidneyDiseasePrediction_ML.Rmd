@@ -9,22 +9,21 @@ Machine Learning Classification Problem example. Uses different machine learning
 https://archive.ics.uci.edu/ml/datasets/Chronic_Kidney_Disease
 
 **Load Required Packages**
-```{r}
-library(RWeka)
-library(caret)
+```{r message=FALSE}
+suppressWarnings (library(RWeka))
+suppressWarnings (library(caret))
+suppressWarnings (library(ROCR))
 # libraries for partition trees
-library(rpart)
-library(rpart.plot)
-library(rattle)
-
-library(ROCR)
+suppressWarnings (library(rpart))
+suppressWarnings (library(rpart.plot))
+suppressWarnings (library(rattle))
 ```
 
 **load data** 
 ```{r}
-## load data
-setwd("/Users/shruti/Desktop/WorkMiscellaneous/MachineLearning/UCI_ML/Chronic_Kidney_Disease")
-Chronic_Kidney_Disease <- read.arff("chronic_kidney_disease.arff")
+# load data
+file_location <- file.path("/Users","shruti","Dropbox","SHRUTIM","Rscripts","MachineLearning","KidneyDiseasePrediction/")
+Chronic_Kidney_Disease <- read.arff(paste(file_location,"chronic_kidney_disease.arff",sep=""))
 
 # data munging
 dim(Chronic_Kidney_Disease)
@@ -49,27 +48,24 @@ apply(Chronic_Kidney_Disease2[,c(3:9,19:25)],2,table)
 ```{r}
 # create dummy variables for training data
 sapply(Chronic_Kidney_Disease2[1,],class)
+outcome_column_id <- grep("class",colnames(Chronic_Kidney_Disease2))
 # since many of the features are categorical, convert them into dummy varaibles. 
-dummy_variables <- dummyVars(~.,data=Chronic_Kidney_Disease2,fullRank=T)
-dataset_dummy_variables <- data.frame(predict(dummy_variables, newdata=Chronic_Kidney_Disease2))
-table(Chronic_Kidney_Disease2$class)
-table(dataset_dummy_variables$class.notckd) # 0 implies ckd; 1 implies notckd
+dummy_variables <- dummyVars(~.,data=Chronic_Kidney_Disease2[,-outcome_column_id],fullRank=T)
+dataset_dummy_variables <- data.frame(predict(dummy_variables, newdata=Chronic_Kidney_Disease2[,-outcome_column_id]))
 ```
 
 **split data**
 ```{r}
+# the class of column used for creating DataPartion is very important. Same variable can give different training_index depending on whether it is numeric or factor.
 set.seed(123)
-training_index <- createDataPartition(dataset_dummy_variables$class.notckd,p=0.6,list=F)
-# column id of the outcome
-outcome_column_id <- grep("class.notckd",colnames(dataset_dummy_variables))
-
-training_set <- droplevels(dataset_dummy_variables[training_index,-outcome_column_id])
-test_set <- droplevels(dataset_dummy_variables[-training_index,-outcome_column_id])
+training_index <- createDataPartition(Chronic_Kidney_Disease2$class,p=0.6,list=F)
+training_set <- droplevels(dataset_dummy_variables[training_index,])
+test_set <- droplevels(dataset_dummy_variables[-training_index,])
 dim(training_set); dim(test_set)
 
 # if you are trying to do classification using regression models, it is imp to use outcome as factor not numeric
-outcome_training_set <- factor(dataset_dummy_variables[training_index,outcome_column_id],ordered=TRUE)
-outcome_test_set <- factor(dataset_dummy_variables[-training_index,outcome_column_id])
+outcome_training_set <- factor(Chronic_Kidney_Disease2$class[training_index])
+outcome_test_set <- factor(Chronic_Kidney_Disease2$class[-training_index])
 table(outcome_training_set) ; table(outcome_test_set)
 ```
 
@@ -119,7 +115,7 @@ dim(final_training_set); dim(final_test_set)
 # PCA
 pc <- prcomp(final_training_set,center=T,scale=T)
 plot(pc,type="l")
-pc$rotation[order(-abs(pc$rotation[,"PC1"])),]
+#pc$rotation[order(-abs(pc$rotation[,"PC1"])),]
 
 par(xpd=TRUE)
 for(i in seq_along(colnames(final_training_set)))
@@ -132,9 +128,8 @@ for(i in seq_along(colnames(final_training_set)))
 **model building**
 ```{r: }
 # k-fold cross validation
-train_control <- trainControl(method="cv", number=5, savePredictions = T)
+train_control <- trainControl(method="cv", number=5, savePredictions = T,classProbs =  TRUE)
 
-# model building
 # svm - linear
 set.seed(1)
 svm_lm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "svmLinear",preProcess = c("center", "scale","pca"))
@@ -166,7 +161,7 @@ elastic_net_model <- train(y=outcome_training_set, x=final_training_set, trContr
 # classification Trees
 set.seed(1)
 rpart_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "rpart",preProcess = c("center", "scale","pca"))
-plot(rpart_model)
+#plot(rpart_model)
 
 # random forest
 set.seed(1)
@@ -176,7 +171,7 @@ plot(rf_model)
 # boosting with tres
 set.seed(1)
 gbm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "gbm", verbose=F,preProcess = c("center", "scale","pca"))
-plot(gbm_model)
+#plot(gbm_model)
 
 # linear discriminant analysis
 set.seed(1)
@@ -185,9 +180,9 @@ lda_model <- train(y=outcome_training_set, x=final_training_set, trControl=train
 # naive bayes
 # parameters of the algorithm: fl: Factor for Laplace correction, default factor is 0, i.e. no correction;
 # usekernel: if TRUE a kernel density estimate (density) is used for denstity estimation. If FALSE a normal density is estimated.
-set.seed(1)
-nb_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method="nb", tuneGrid=expand.grid(.fL=c(0), .usekernel=c(TRUE)) ,preProcess = c("center", "scale","pca"))
-warnings()
+# set.seed(1)
+# nb_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method="nb", tuneGrid=expand.grid(.fL=c(0), .usekernel=c(TRUE)) ,preProcess = c("center", "scale","pca"))
+# warnings()
 # "The function NaiveBayes prints a warning if all these probabilities are numerical 0, i.e. that the observation has a numerical probability of 0 for all classes. "
 
 # collect resamples
@@ -276,8 +271,8 @@ title(main="ROC curves for test data")
 varImp(svm_rbf_model)
 plot(varImp(svm_rbf_model))
 
-ckd_training_set <- which(outcome_training_set==0)
-nonckd_training_set <- which(outcome_training_set==1)
+ckd_training_set <- which(outcome_training_set=="ckd")
+nonckd_training_set <- which(outcome_training_set=="notckd")
 
 imp_features_svm <- (c("rbc.c","bu","sod","bgr","age"))
 sapply(imp_features_svm,function(i) {
@@ -292,11 +287,10 @@ rpart_model2 <- train(y=outcome_training_set, x=final_training_set, trControl=tr
 plot(varImp(rpart_model2))
 # plot classification trees
 fancyRpartPlot(rpart_model2$finalModel)
-plot(Chronic_Kidney_Disease2$class,Chronic_Kidney_Disease2$pcv,main="pcv")
-# summary(subset(Chronic_Kidney_Disease2,class=="ckd",pcv))
-# summary(subset(Chronic_Kidney_Disease2,class=="notckd",pcv))
+plot(Chronic_Kidney_Disease2$class,Chronic_Kidney_Disease2$pcv,main="rbcc")
 
 #lapply(training_models,varImp)
 ```
+
 
 
