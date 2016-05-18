@@ -118,10 +118,10 @@ plot(pc,type="l")
 #pc$rotation[order(-abs(pc$rotation[,"PC1"])),]
 
 par(xpd=TRUE)
+par(mfrow=c(2,2))
 for(i in seq_along(colnames(final_training_set)))
 {
   plot(outcome_training_set,final_training_set[,i],main=colnames(final_training_set)[i])
-  legend(1.2,-6,c("0:ckd","1:notckd"),cex=0.8)
 }
 ```
 
