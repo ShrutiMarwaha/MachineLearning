@@ -8,20 +8,20 @@ output: html_document
 Kaggle Challenge to classify 39 different crimes that occurred in SF in 12 years. https://www.kaggle.com/c/sf-crime
 
 **Load Required Packages**
-```{r}
-library(caret)
-library(ggplot2)
-library(lubridate) # to extract date, month etc
-library(ggmap) # to get zipcode from longitude and latitude
-library(dplyr)
+```{r message=FALSE}
+suppressWarnings( library(caret) )
+suppressWarnings( library(ggplot2) )
+suppressWarnings( library(lubridate) ) # to extract date, month etc
+suppressWarnings( library(ggmap) ) # to get zipcode from longitude and latitude
+suppressWarnings( library(dplyr) )
 ```
 
 **load data** 
 ```{r}
 # load data
-setwd("/Users/shruti/Desktop/WorkMiscellaneous/MachineLearning/SanFranciscoCrime/")
-train_data <- read.csv("./train.csv") 
-#test_data <- read.csv("./test.csv") 
+file_location <- file.path("/Users","shruti","Desktop","WorkMiscellaneous","MachineLearning","SanFranciscoCrime/")
+train_data <- read.csv(paste(file_location,"train.csv",sep=""))
+test_data <- read.csv(paste(file_location,"test.csv",sep="")) 
 
 # data exploration
 dim(train_data)
@@ -31,10 +31,14 @@ levels(train_data$Category)
 table(train_data$Category)
 # missing data
 sum(!complete.cases(train_data))
+
+dim(test_data)
+head(test_data)
 ```
 
 **Data Munging**
 ```{r}
+# since test data does not contain "Descript", "Resolution", not using it fir training the model
 # function for Feature Extraction
 FeatureExtraction <- function(dataset,zip){
   year_of_crime <- as.factor(year(dataset$Dates))
@@ -77,19 +81,19 @@ closest_zipcode(c(train_data$Y[1],train_data$X[1]))
 revgeocode(c(train_data$X[1], train_data$Y[1]))
 
 # zip_codes_training <- apply(train_data[,c("Y","X")],1,closest_zipcode)
-# save(zip_codes_training,file="zip_codes_training.rda")
-load("./zip_codes_training.rda")
+# save(zip_codes_training,file=paste(file_location,"zip_codes_training.rda",sep=""))
+load(paste(file_location,"zip_codes_training.rda",sep=""))
 
 # zip_codes_test <- apply(test_data[,c("Y","X")],1,closest_zipcode)
-# save(zip_codes_test,file="zip_codes_test.rda")
-#load("./zip_codes_test.rda")
+# save(zip_codes_test,file=paste(file_location,"zip_codes_test.rda",sep=""))
+# load(paste(file_location,"zip_codes_test.rda",sep=""))
 
 # combining new features
 training_features <- cbind( FeatureExtraction(train_data),zip=zip_codes_training, Category=train_data$Category )
 #test_features <- FeatureExtraction(test_data,zip=zip_codes_test)
-# save(training_features,file="./training_features.rda")
-# save(test_features,file="./test_features.rda")
-# load("./training_features.rda")
+# save(training_features,file=paste(file_location,"training_features.rda",sep=""))
+# save(test_features,file=paste(file_location,"test_features.rda",sep=""))
+# load(paste(file_location,"training_features.rda",sep=""))
 head(training_features)
 ```
 
@@ -104,45 +108,7 @@ dim(training_set); dim(test_set)
 
 **exploratory data analysis**
 ```{r}
-# Frequency/historgram of different crimes.
-Category_hist <- training_set %>%
-  group_by(Category) %>%
-  summarise(count = n()) %>%
-  transform(Category = reorder(Category,-count))
-head(Category_hist)
-Category_hist <- arrange(Category_hist, desc(count))
-top10_crimes <- Category_hist[1:10,1]
-
-ggplot(Category_hist) + 
-  geom_bar(aes(x=Category, y=count,
-        color = Category, fill = Category),
-        stat="identity")+
-        coord_flip()+
-        theme(legend.position="None")+
-        ggtitle("Number of crimes in each category")+
-        xlab("Number of crimes")+
-        ylab("Category of crime")
-
-# Variations in top 10 crimes by year
-data_plot <- training_set %>%
-  subset(Category %in% top10_crimes) %>%
-  group_by(year_of_crime,Category,month_of_crime) %>%
-  summarise(count = n())
-data_plot$Category = factor(data_plot$Category,levels = top10_crimes)
-head(data_plot)
-
-ggplot(data = data_plot,aes(x=year_of_crime, y=count,fill = Category)) +
-  geom_boxplot() +
-    facet_wrap(~Category,ncol = 5)+
-    theme(legend.position="None",
-    axis.text.x = element_text(angle = 90, hjust = 1)) +
-    xlab("Year")+
-    ylab("Number of crime incidents")+
-    ggtitle("Variations in crime by year")+
-    xlab("Number of crimes")+
-    ylab("Year")
-
-## Variation with day of week
+# Variation in crime with day of week
 data_day <- training_set %>%
   group_by(DayOfWeek,year_of_crime,month_of_crime) %>%
   summarise(count = n())
@@ -151,7 +117,7 @@ head(data_day)
 boxplot(data_day$count~data_day$DayOfWeek,
         col=seq(along=(levels(data_day$DayOfWeek))), 
         ylim = c(min(data_day$count),max(data_day$count)),
-        main = c("Variation with day of week"),
+        main = c("Variation in crime with day of week"),
         ylab=c("Number of crimes"),
         axes=F)
 axis(2, seq(100,1100, 100), seq(100,1100, 100))
@@ -215,5 +181,66 @@ boxplot(data_zip$count ~data_zip$zip,
         axes=F)
 axis(2, seq(0,1000, 100), seq(0,1000, 100))
 axis(1, seq(1,29,1), levels(data_zip$zip), las=2, cex.axis=0.8)
+
+# Frequency/historgram of different crimes.
+Category_hist <- training_set %>%
+  group_by(Category) %>%
+  summarise(count = n()) %>%
+  transform(Category = reorder(Category,-count))
+head(Category_hist)
+Category_hist <- arrange(Category_hist, desc(count))
+top10_crimes <- Category_hist[1:10,1]
+#top5_crimes <- Category_hist[1:5,1]
+
+ggplot(Category_hist) + 
+  geom_bar(aes(x=Category, y=count,
+        color = Category, fill = Category),
+        stat="identity")+
+        coord_flip()+
+        theme(legend.position="None")+
+        ggtitle("Number of crimes in each category")+
+        ylab("Number of crimes")+
+        xlab("Category of crime")
+
+# Variations in top 10 crimes by year
+data_year_category <- training_set %>%
+  subset(Category %in% top10_crimes) %>%
+  group_by(year_of_crime,Category,month_of_crime) %>%
+  summarise(count = n())
+data_year_category$Category = factor(data_year_category$Category,levels = top10_crimes)
+head(data_year_category)
+
+ggplot(data = data_year_category,aes(x=year_of_crime, y=count,fill = Category)) +
+  geom_boxplot() +
+    facet_wrap(~Category,ncol = 5)+ 
+#facet_wrap wraps a 1d sequence of panels into 2d
+    theme(legend.position="None",
+    axis.text.x = element_text(angle = 90, hjust = 1)) +
+    xlab("Year")+
+    ylab("Number of crime incidents")+
+    ggtitle("Variations in crime by year")+
+    xlab("Number of crimes")+
+    ylab("Year")
+
+# Variations in top 10 crimes by day of week
+data_day_category <- training_set %>%
+  subset(Category %in% top10_crimes) %>%
+  group_by(DayOfWeek,Category,month_of_crime) %>%
+  summarise(count = n())
+data_day_category$Category = factor(data_day_category$Category,levels = top10_crimes)
+head(data_day_category)
+
+ggplot(data = data_day_category,aes(x=DayOfWeek, y=count,fill = Category)) +
+  geom_boxplot() +
+    facet_wrap(~Category,ncol = 5)+ 
+#facet_wrap wraps a 1d sequence of panels into 2d
+    theme(legend.position="None",
+    axis.text.x = element_text(angle = 90, hjust = 1)) +
+    xlab("day")+
+    ylab("Number of crime incidents")+
+    ggtitle("Variations in crime by Day Of Week")+
+    xlab("Number of crimes")+
+    ylab("Day Of Week")
+
 ```
 
