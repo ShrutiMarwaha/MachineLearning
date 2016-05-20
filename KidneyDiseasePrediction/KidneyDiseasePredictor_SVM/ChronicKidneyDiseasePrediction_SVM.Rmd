@@ -76,10 +76,10 @@ remove_nonvaring_collinear_features <- function(training_data,test_data,corr_the
   if(length(near_zero_covariates)>0)
   {
     # find column indices of the near_zero_covariates
-    nzc_indices_training <- sapply(near_zero_covariates,function(i) {grep(i,colnames(training_data))})
+    nzc_indices_training <- sapply(near_zero_covariates,function(i) {grep( paste("^",i,"$",sep=""),colnames(training_data))})
     training_data_nzc <- training_data[,-nzc_indices_training]
     
-    nzc_indices_test <- sapply(near_zero_covariates,function(i) {grep(i,colnames(test_data))})  
+    nzc_indices_test <- sapply(near_zero_covariates,function(i) {grep( paste("^",i,"$",sep=""),colnames(test_data))})  
     test_data_nzc <- test_data[,-nzc_indices_test]
   } else {
     training_data_nzc <- training_data
@@ -93,10 +93,10 @@ remove_nonvaring_collinear_features <- function(training_data,test_data,corr_the
 
   if(length(high_correlation)>0)
   {
-    correlated_indices_training <- sapply( high_correlation,function(i) {grep(i,colnames(training_data_nzc))} )
+    correlated_indices_training <- sapply( high_correlation,function(i) {grep( paste("^",i,"$",sep=""),colnames(training_data_nzc))} )
     final_training_data <- training_data_nzc[,-correlated_indices_training]
     
-    correlated_indices_test <- sapply( high_correlation,function(i) {grep(i,colnames(test_data_nzc))} )
+    correlated_indices_test <- sapply( high_correlation,function(i) {grep( paste("^",i,"$",sep=""),colnames(test_data_nzc))} )
     final_test_data <- test_data_nzc[,-correlated_indices_test]
   }else{
     final_training_data <- training_data_nzc
@@ -142,6 +142,7 @@ plot(pc,type="l",lab=c(10,10,12))
 #pc$rotation[order(-abs(pc$rotation[,"PC1"])),]
 
 par(xpd=TRUE)
+par(mfrow=c(2,2))
 for(i in seq_along(colnames(final_training_set)))
 {
   plot(training_output,final_training_set[,i],main=colnames(final_training_set)[i])
