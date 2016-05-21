@@ -465,6 +465,10 @@ length(training_output); length(test_output)
 load(paste(file_location,"training_output.rda",sep=""))
 
 # work on smaller data
+file_location <- file.path("/Users","shruti","Desktop","WorkMiscellaneous","MachineLearning","SanFranciscoCrime/")
+load(paste(file_location,"final_training_set.rda",sep=""))
+load(paste(file_location,"training_output.rda",sep=""))
+
 set.seed(1)
 sample_indices <- sample(1:nrow(final_training_set),50000)
 sample_data <- droplevels(final_training_set[sample_indices,])
