@@ -44,85 +44,114 @@ dim(Chronic_Kidney_Disease2)
 apply(Chronic_Kidney_Disease2[,c(3:9,19:25)],2,table)
 ```
 
-**convert factor variables into dummy variables**
+**Function to convert factor variables into dummy variables**
 ```{r}
-# create dummy variables for training data
+# function to create dataset with dummy variables
+creat_dummy_var_data <- function(dataset){
+  dummy_variables <- dummyVars(~., data=dataset, fullRank=T)
+  dummy_var_data <- data.frame( predict(dummy_variables, newdata=dataset) )
+  return(dummy_var_data)
+}
+```
+
+**Function to Split data into Training and Test**
+```{r}
+create_training_test <- function(features_dataset,outcome_data,training_test_ratio){
+  training_index <- createDataPartition(outcome_data,p=training_test_ratio,list=F)
+  
+  training_set <- droplevels(features_dataset[training_index,])
+  test_set <- droplevels(features_dataset[-training_index,])
+  
+  # if you are trying to do classification using regression models, it is imp to use outcome as factor not numeric
+  outcome_training_set <- factor(outcome_data[training_index])
+  outcome_test_set <- factor(outcome_data[-training_index])
+  
+  return(list(training_features=training_set, test_features=test_set, training_outcome=outcome_training_set, test_outcome=outcome_test_set))
+}
+```
+
+**Function for Data Pre-processing**
+```{r}
+remove_nonvaring_collinear_features <- function(training_data,test_data,corr_theshold=0.75){
+  # remove zero covaritates (features with NO VARIABILITY)
+  #nearZeroVar(training_data,saveMetrics = T)
+  near_zero_covariates <- colnames(training_data)[nearZeroVar(training_data)]
+  
+  if(length(near_zero_covariates)>0)
+  {
+    # find column indices of the near_zero_covariates
+    nzc_indices_training <- sapply(near_zero_covariates,function(i) {grep( paste("^",i,"$",sep=""),colnames(training_data))})
+    training_data_nzc <- training_data[,-nzc_indices_training]
+    
+    nzc_indices_test <- sapply(near_zero_covariates,function(i) {grep( paste("^",i,"$",sep=""),colnames(test_data))})  
+    test_data_nzc <- test_data[,-nzc_indices_test]
+  } else {
+    training_data_nzc <- training_data
+    test_data_nzc <- test_data
+  }
+
+  # CORRELATED features
+  feature_correlation <- cor(training_data_nzc)
+  # search through a correlation matrix and returns a vector of integers corresponding to     columns to remove to reduce pair-wise correlations.
+  high_correlation <- findCorrelation(feature_correlation,corr_theshold,verbose=F,names=T)
+
+  if(length(high_correlation)>0)
+  {
+    correlated_indices_training <- sapply( high_correlation,function(i) {grep( paste("^",i,"$",sep=""),colnames(training_data_nzc))} )
+    final_training_data <- training_data_nzc[,-correlated_indices_training]
+    
+    correlated_indices_test <- sapply( high_correlation,function(i) {grep( paste("^",i,"$",sep=""),colnames(test_data_nzc))} )
+    final_test_data <- test_data_nzc[,-correlated_indices_test]
+  }else{
+    final_training_data <- training_data_nzc
+    final_test_data <- test_data_nzc
+  }
+  
+  return(list(processed_training_set=final_training_data, processed_test_set=final_test_data))
+}
+```
+
+**Execution**
+```{r: Run the above functions to create model}
 sapply(Chronic_Kidney_Disease2[1,],class)
+# since many of the features are categorical, convert them into dummy varaibles except the outcome. 
 outcome_column_id <- grep("class",colnames(Chronic_Kidney_Disease2))
-# since many of the features are categorical, convert them into dummy varaibles. 
-dummy_variables <- dummyVars(~.,data=Chronic_Kidney_Disease2[,-outcome_column_id],fullRank=T)
-dataset_dummy_variables <- data.frame(predict(dummy_variables, newdata=Chronic_Kidney_Disease2[,-outcome_column_id]))
-```
+dataset_dummy_variables <- creat_dummy_var_data(Chronic_Kidney_Disease2[,-outcome_column_id])
 
-**split data**
-```{r}
-# the class of column used for creating DataPartion is very important. Same variable can give different training_index depending on whether it is numeric or factor.
+# split data
+# IMPORTANT NOTE: the class of column used for creating DataPartion is very important. Same variable can give different training_index depending on whether it is numeric or factor.
 set.seed(123)
-training_index <- createDataPartition(Chronic_Kidney_Disease2$class,p=0.6,list=F)
-training_set <- droplevels(dataset_dummy_variables[training_index,])
-test_set <- droplevels(dataset_dummy_variables[-training_index,])
-dim(training_set); dim(test_set)
+split_data <- create_training_test(dataset_dummy_variables,Chronic_Kidney_Disease2$class,0.6)
+lapply(split_data,head)
+lapply(split_data[1:2],dim)
 
-# if you are trying to do classification using regression models, it is imp to use outcome as factor not numeric
-outcome_training_set <- factor(Chronic_Kidney_Disease2$class[training_index])
-outcome_test_set <- factor(Chronic_Kidney_Disease2$class[-training_index])
-table(outcome_training_set) ; table(outcome_test_set)
-```
+# data preprocessing
+processed_data <- remove_nonvaring_collinear_features(split_data$training_features,split_data$test_features,0.75)
+lapply(processed_data,dim)
 
-**exploratory data analysis**
-```{r}
-# remove zero covaritates (features with no variability)
-nearZeroVar(training_set,saveMetrics = T)
-near_zero_covariates <- colnames(training_set)[nearZeroVar(training_set)]
-#near_zero_covariates <- nearZeroVar(training_set)
-near_zero_covariates
-
-if(length(near_zero_covariates)>0)
-{
-  # find column indices of the near_zero_covariates
-  nzc_indices_training <- sapply(near_zero_covariates,function(i) {grep(i,colnames(training_set))})
-  training_set_nzc <- training_set[,-nzc_indices_training]
-  
-  nzc_indices_test <- sapply(near_zero_covariates,function(i) {grep(i,colnames(test_set))})  
-  test_set_nzc <- test_set[,-nzc_indices_test]
-} else {
-  training_set_nzc <- training_set
-  test_set_nzc <- test_set
-}
-dim(training_set_nzc); dim(test_set_nzc)
-
-# correlated features
-feature_correlation <- cor(training_set_nzc)
-# search through a correlation matrix and returns a vector of integers corresponding to columns to remove to reduce pair-wise correlations.
-findCorrelation(feature_correlation,0.75,verbose=T,names=T)
-high_correlation <- findCorrelation(feature_correlation,0.75,verbose=T,names=T)
-high_correlation
-
-if(length(high_correlation)>0)
-{
-  correlated_indices_training <- sapply( high_correlation,function(i) {grep(i,colnames(training_set_nzc))} )
-  final_training_set <- training_set_nzc[,-correlated_indices_training]
-  
-  correlated_indices_test <- sapply( high_correlation,function(i) {grep(i,colnames(test_set_nzc))} )
-  final_test_set <- test_set_nzc[,-correlated_indices_test]
-}else{
-  final_training_set <- training_set_nzc
-  final_test_set <- test_set_nzc
-}
+final_training_set <- processed_data$processed_training_set
+final_test_set <- processed_data$processed_test_set
 dim(final_training_set); dim(final_test_set)
 
-# plots
+training_output <- split_data$training_outcome
+test_output <- split_data$test_outcome
+length(training_output); length(test_output)
+```
+
+**Exploratory data analysis**
+```{r:plots}
 # PCA
 pc <- prcomp(final_training_set,center=T,scale=T)
-plot(pc,type="l")
+plot(pc,type="l",lab=c(10,10,12))
 #pc$rotation[order(-abs(pc$rotation[,"PC1"])),]
 
 par(xpd=TRUE)
 par(mfrow=c(2,2))
 for(i in seq_along(colnames(final_training_set)))
 {
-  plot(outcome_training_set,final_training_set[,i],main=colnames(final_training_set)[i])
+  plot(training_output,final_training_set[,i],main=colnames(final_training_set)[i],col=2:3)
 }
+par(mfrow=c(1,1))
 ```
 
 **model building**
@@ -132,15 +161,15 @@ train_control <- trainControl(method="cv", number=5, savePredictions = T,classPr
 
 # svm - linear
 set.seed(1)
-svm_lm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "svmLinear",preProcess = c("center", "scale","pca"))
+svm_lm_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "svmLinear",preProcess = c("center", "scale","pca"))
 
 # svm - rbf kernel
 set.seed(1)
-svm_rbf_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "svmRadial", tuneLegth=5, preProcess = c("center", "scale","pca"))
+svm_rbf_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "svmRadial", tuneLegth=5, preProcess = c("center", "scale","pca"))
 
 # logistic regression
 set.seed(1)
-glm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glm",family=binomial,maxit=100, preProcess = c("center", "scale","pca"))
+glm_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "glm",family=binomial,maxit=100, preProcess = c("center", "scale","pca"))
 # possible warnings with glm:
 #1. "glm.fit: algorithm did not converge"; use maxit much greater than default value of 25"
 #2. "glm.fit: fitted probabilities numerically 0 or 1 occurred" indicates that you should use penalized regression. Your fit is exactly collinear.
@@ -148,40 +177,40 @@ glm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train
 
 # Ridge Regression creates a linear regression model that is penalized with the L2-norm which is the sum of the squared coefficients.
 set.seed(1)
-ridge_regression_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=0,lambda=0.001),preProcess = c("center", "scale","pca"))
+ridge_regression_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=0,lambda=0.001),preProcess = c("center", "scale","pca"))
 
 # LASSO (Least Absolute Shrinkage and Selection Operator) creates a regression model that is penalized with the L1-norm which is the sum of the absolute coefficients. 
 set.seed(1)
-lasso_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=1,lambda=0.001),preProcess = c("center", "scale","pca"))
+lasso_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=1,lambda=0.001),preProcess = c("center", "scale","pca"))
 
 # Elastic Net creates a regression model that is penalized with both the L1-norm and L2-norm. 
 set.seed(1)
-elastic_net_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=0.5,lambda=0.001),preProcess = c("center", "scale","pca"))
+elastic_net_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "glmnet",family = "binomial",tuneGrid=expand.grid(alpha=0.5,lambda=0.001),preProcess = c("center", "scale","pca"))
 
 # classification Trees
 set.seed(1)
-rpart_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "rpart",preProcess = c("center", "scale","pca"))
+rpart_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "rpart",preProcess = c("center", "scale","pca"))
 #plot(rpart_model)
 
 # random forest
 set.seed(1)
-rf_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "rf",prox=T,preProcess = c("center", "scale"))
+rf_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "rf",prox=T,preProcess = c("center", "scale"))
 plot(rf_model)
 
 # boosting with tres
 set.seed(1)
-gbm_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "gbm", verbose=F,preProcess = c("center", "scale","pca"))
+gbm_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "gbm", verbose=F,preProcess = c("center", "scale","pca"))
 #plot(gbm_model)
 
 # linear discriminant analysis
 set.seed(1)
-lda_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "lda",preProcess = c("center", "scale","pca"))
+lda_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "lda",preProcess = c("center", "scale","pca"))
 
 # naive bayes
 # parameters of the algorithm: fl: Factor for Laplace correction, default factor is 0, i.e. no correction;
 # usekernel: if TRUE a kernel density estimate (density) is used for denstity estimation. If FALSE a normal density is estimated.
 # set.seed(1)
-# nb_model <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method="nb", tuneGrid=expand.grid(.fL=c(0), .usekernel=c(TRUE)) ,preProcess = c("center", "scale","pca"))
+# nb_model <- train(y=training_output, x=final_training_set, trControl=train_control, method="nb", tuneGrid=expand.grid(.fL=c(0), .usekernel=c(TRUE)) ,preProcess = c("center", "scale","pca"))
 # warnings()
 # "The function NaiveBayes prints a warning if all these probabilities are numerical 0, i.e. that the observation has a numerical probability of 0 for all classes. "
 
@@ -199,33 +228,33 @@ bwplot(train_results)
 ```{r}
 #Ideally, you select model that performs best on training data and evaluate on test set. I am doing for all models just for illustration 
 test_pred_svm_lm <- predict(svm_lm_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_svm_lm, reference=outcome_test_set)
+confusionMatrix(data=test_pred_svm_lm, reference=test_output)
 
 test_pred_svm_rbf <- predict(svm_rbf_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_svm_rbf, reference=outcome_test_set)
+confusionMatrix(data=test_pred_svm_rbf, reference=test_output)
 
 test_pred_rpart <- predict(rpart_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_rpart, outcome_test_set)
+confusionMatrix(data=test_pred_rpart, test_output)
 
 test_pred_gbm <- predict(gbm_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_gbm, outcome_test_set)
+confusionMatrix(data=test_pred_gbm, test_output)
 
 test_pred_rf <- predict(rf_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_rf, outcome_test_set)
+confusionMatrix(data=test_pred_rf, test_output)
 
 test_pred_lda <- predict(lda_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_lda, outcome_test_set)
+confusionMatrix(data=test_pred_lda, test_output)
 
 test_pred_ridge <- predict(ridge_regression_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_ridge, outcome_test_set)
+confusionMatrix(data=test_pred_ridge, test_output)
 
 test_pred_lasso <- predict(lasso_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_lasso, outcome_test_set)
+confusionMatrix(data=test_pred_lasso, test_output)
 
 test_pred_elastic_net <- predict(elastic_net_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_elastic_net, outcome_test_set)
+confusionMatrix(data=test_pred_elastic_net, test_output)
 
-balanced_accuracy <- function(trained_model, test_features=final_test_set, test_outcomes=outcome_test_set){
+balanced_accuracy <- function(trained_model, test_features=final_test_set, test_outcomes=test_output){
   test_model <- predict(trained_model,test_features)
   test_score <- confusionMatrix(data=test_model, test_outcomes)
   return(test_score$byClass[["Balanced Accuracy"]])
@@ -236,7 +265,7 @@ lapply(training_models, balanced_accuracy)
 
 **ROC CURVES**
 ```{r}
-roc_curve <- function(test_predictions,colour=1,test_labels=outcome_test_set){
+roc_curve <- function(test_predictions,colour=1,test_labels=test_output){
   pred <- prediction(as.numeric(test_predictions), as.numeric(test_labels) )
   perf <- performance(pred, measure = "tpr", x.measure = "fpr")
   plot(perf,col=colour)
@@ -271,8 +300,8 @@ title(main="ROC curves for test data")
 varImp(svm_rbf_model)
 plot(varImp(svm_rbf_model))
 
-ckd_training_set <- which(outcome_training_set=="ckd")
-nonckd_training_set <- which(outcome_training_set=="notckd")
+ckd_training_set <- which(training_output=="ckd")
+nonckd_training_set <- which(training_output=="notckd")
 
 imp_features_svm <- (c("rbc.c","bu","sod","bgr","age"))
 sapply(imp_features_svm,function(i) {
@@ -283,7 +312,7 @@ varImp(rf_model)
 plot(varImp(rf_model))
 
 set.seed(1)
-rpart_model2 <- train(y=outcome_training_set, x=final_training_set, trControl=train_control, method = "rpart") # without scaling n pca
+rpart_model2 <- train(y=training_output, x=final_training_set, trControl=train_control, method = "rpart") # without scaling n pca
 plot(varImp(rpart_model2))
 # plot classification trees
 fancyRpartPlot(rpart_model2$finalModel)
