@@ -1,6 +1,6 @@
 # MachineLearning
 Machine Learning related R scripts:
-SF crime
+SF crime classification
 Iris
 Wage
 Kidney Disease
