@@ -14,6 +14,7 @@ suppressWarnings( library(ggplot2) )
 suppressWarnings( library(lubridate) ) # to extract date, month etc
 suppressWarnings( library(ggmap) ) # to get zipcode from longitude and latitude
 suppressWarnings( library(dplyr) )
+suppressWarnings( library(zipcode) )
 ```
 
 **load data** 
@@ -38,7 +39,7 @@ head(test_data)
 
 **Data Munging**
 ```{r}
-# since test data does not contain "Descript", "Resolution", not using it fir training the model
+# since test data does not contain "Descript", "Resolution", not using it for training the model
 # function for Feature Extraction
 FeatureExtraction <- function(dataset,zip){
   year_of_crime <- as.factor(year(dataset$Dates))
@@ -51,8 +52,6 @@ FeatureExtraction <- function(dataset,zip){
 }
 
 # Feature engineering: get zip code from latitude and longitude
-# install.packages("zipcode")
-library(zipcode)
 data(zipcode)
 sf_zipcodes <- subset(zipcode,city=="San Francisco",)
 sf_zipcodes$latitude <- as.numeric(format(sf_zipcodes$latitude,digits=8))
@@ -108,139 +107,391 @@ dim(training_set); dim(test_set)
 
 **exploratory data analysis**
 ```{r}
-# Variation in crime with day of week
-data_day <- training_set %>%
-  group_by(DayOfWeek,year_of_crime,month_of_crime) %>%
+# Function to group data frame by specific columns
+group_by_col <- function(dataset,...){
+  dataset %>%
+  group_by_(.dots = ...) %>%
   summarise(count = n())
-head(data_day)
+}
 
-boxplot(data_day$count~data_day$DayOfWeek,
-        col=seq(along=(levels(data_day$DayOfWeek))), 
-        ylim = c(min(data_day$count),max(data_day$count)),
-        main = c("Variation in crime with day of week"),
-        ylab=c("Number of crimes"),
-        axes=F)
-axis(2, seq(100,1100, 100), seq(100,1100, 100))
-axis(1, 1:7, levels(data_day$DayOfWeek), las=2)
-# the graph indicates that maximum crimes occur on Friday and minimum on sunday
+# Function to plot crime count with variation in different features 
+plot_by_col <- function(dataset,xcolname,ycolname){
+  par(mar=c(6,4,4,2),mgp=c(3,0.5,0),cex.axis=0.8,cex.main=0.8)
+  
+  x_levels <- levels(dataset[[xcolname]]) 
+  x_level_count <- seq_along(x_levels)
+  
+  boxplot(dataset[[ycolname]] ~ dataset[[xcolname]],
+          col=x_level_count,
+          ylim = c( min(dataset[[ycolname]]), max(dataset[[ycolname]]) ),
+          xaxt="n",
+          #xlab=xcolname,
+          ylab=c("Number of crimes"),
+          main = c(paste("Variation in crime with",xcolname))
+          )
+  axis(side=1, at=x_level_count, labels=x_levels, las=2)
+}
 
-# Variation in crime with year
-data_year <- training_set %>%
-  group_by(year_of_crime,month_of_crime) %>%
-  summarise(count = n())
-
-boxplot(data_year$count~data_year$year_of_crime,
-        col=seq(along=(levels(data_year$year_of_crime))),
-        #ylim = c(min(data_year$count),max(data_year$count)),
-        ylim = c(2000,5000),
-        main = c("Variation in crime with year"),
-        ylab=c("Number of crimes"),
-        axes=F)
-axis(2, seq(2000,5000, 1000), seq(2000,5000, 1000))
-axis(1, 1:13, levels(data_day$year_of_crime), las=2)
-
-# Variation in crime with month
-data_month <- training_set %>%
-  group_by(month_of_crime,year_of_crime) %>%
-  summarise(count = n())
-
-boxplot(data_month$count ~data_month$month_of_crime,
-        col=seq(along=(levels(data_month$month_of_crime))),
-        ylim = c(2000,5000),
-        main = c("Variation in crime with month"),
-        ylab=c("Number of crimes"),
-        axes=F)
-axis(2, seq(2000,5000, 1000), seq(2000,5000, 1000))
-axis(1, 1:12, levels(data_month$month_of_crime), las=2)
-# the graph indicates that maximum crimes occur in October and least in Dec
-
-### Variation in crime with hour of day
-data_hour <- training_set %>%
-  group_by(hour_of_crime,year_of_crime,month_of_crime) %>%
-  summarise(count = n())
-
-boxplot(data_hour$count~data_hour$hour_of_crime,
-        col=seq(along=(levels(data_hour$hour_of_crime))), 
-        ylim = c(min(data_hour$count),max(data_hour$count)),
-        main = c("Variation with hour"),
-        ylab=c("Number of crimes"),
-        axes=F)
-axis(2, seq(0,500, 100), seq(0,500, 100))
-axis(1, 0:23, levels(data_hour$hour_of_crime), las=2)
-
-## Variation in crime with zipcode
-data_zip <- training_set %>%
-  group_by(zip,year_of_crime,month_of_crime) %>%
-  summarise(count = n())
-
-boxplot(data_zip$count ~data_zip$zip,
-        col=seq(along=(levels(data_zip$zip))),
-        ylim = c(min(data_zip$count),max(data_zip$count)),
-        main = c("Variation in crime with zip"),
-        ylab=c("Number of crimes"),
-        axes=F)
-axis(2, seq(0,1000, 100), seq(0,1000, 100))
-axis(1, seq(1,29,1), levels(data_zip$zip), las=2, cex.axis=0.8)
-
-# Frequency/historgram of different crimes.
+# top most crimes
 Category_hist <- training_set %>%
   group_by(Category) %>%
   summarise(count = n()) %>%
   transform(Category = reorder(Category,-count))
-head(Category_hist)
-Category_hist <- arrange(Category_hist, desc(count))
-top10_crimes <- Category_hist[1:10,1]
-#top5_crimes <- Category_hist[1:5,1]
 
-ggplot(Category_hist) + 
+Category_hist <- arrange(Category_hist, desc(count))
+head(Category_hist)
+top10_crimes <- Category_hist[1:10,1]
+top5_crimes <- Category_hist[1:5,1]
+
+# To Do: check the following
+# Category_hist <- group_by_col(training_set,"Category")
+# Category_hist2 <- Category_hist %>%
+#   transform(Category = reorder(Category,-count))
+# arrange(Category_hist, desc(count))
+# top10_crimes <- Category_hist[1:10,1]
+# top5_crimes <- Category_hist[1:5,1]
+
+# Frequency/historgram of different crimes.
+#ggplot(Category_hist2) +
+ggplot(Category_hist) +
   geom_bar(aes(x=Category, y=count,
         color = Category, fill = Category),
-        stat="identity")+
-        coord_flip()+
-        theme(legend.position="None")+
-        ggtitle("Number of crimes in each category")+
-        ylab("Number of crimes")+
-        xlab("Category of crime")
+        stat="identity") +
+coord_flip() +
+theme(legend.position="None") +
+ggtitle("Number of crimes in each category") +
+ylab("Number of crimes") +
+xlab("Category of crime")
 
-# Variations in top 10 crimes by year
-data_year_category <- training_set %>%
-  subset(Category %in% top10_crimes) %>%
-  group_by(year_of_crime,Category,month_of_crime) %>%
-  summarise(count = n())
-data_year_category$Category = factor(data_year_category$Category,levels = top10_crimes)
-head(data_year_category)
+# Variation in crime with day of week
+data_day <- group_by_col(training_set,"DayOfWeek","year_of_crime","month_of_crime")
+head(data_day)
+plot_by_col(data_day,"DayOfWeek","count")
+# the graph indicates that maximum crimes occur on Friday and minimum on sunday
 
-ggplot(data = data_year_category,aes(x=year_of_crime, y=count,fill = Category)) +
-  geom_boxplot() +
-    facet_wrap(~Category,ncol = 5)+ 
-#facet_wrap wraps a 1d sequence of panels into 2d
-    theme(legend.position="None",
-    axis.text.x = element_text(angle = 90, hjust = 1)) +
-    xlab("Year")+
-    ylab("Number of crime incidents")+
-    ggtitle("Variations in crime by year")+
-    xlab("Number of crimes")+
-    ylab("Year")
+# Variation in crime with year
+data_year <- group_by_col(training_set,"year_of_crime","month_of_crime")
+#head(data_year)
+plot_by_col(data_year,"year_of_crime","count")
 
-# Variations in top 10 crimes by day of week
-data_day_category <- training_set %>%
-  subset(Category %in% top10_crimes) %>%
-  group_by(DayOfWeek,Category,month_of_crime) %>%
-  summarise(count = n())
-data_day_category$Category = factor(data_day_category$Category,levels = top10_crimes)
-head(data_day_category)
+# Variation in crime with month
+data_month <- group_by_col(training_set,"month_of_crime","year_of_crime")
+plot_by_col(data_month,"month_of_crime","count")
+# the graph indicates that maximum crimes occur in October and least in Dec
 
-ggplot(data = data_day_category,aes(x=DayOfWeek, y=count,fill = Category)) +
-  geom_boxplot() +
-    facet_wrap(~Category,ncol = 5)+ 
-#facet_wrap wraps a 1d sequence of panels into 2d
-    theme(legend.position="None",
-    axis.text.x = element_text(angle = 90, hjust = 1)) +
-    xlab("day")+
-    ylab("Number of crime incidents")+
-    ggtitle("Variations in crime by Day Of Week")+
-    xlab("Number of crimes")+
-    ylab("Day Of Week")
+# Variation in crime with hour of day
+data_hour <- group_by_col(training_set,"hour_of_crime","year_of_crime","month_of_crime")
+plot_by_col(data_hour,"hour_of_crime","count")
+
+## Variation in crime with zipcode
+data_zip <- group_by_col(training_set,"zip","year_of_crime","month_of_crime")
+plot_by_col(data_zip,"zip","count")
 
 ```
 
+```{r}
+# Function to group data frame by specific columns and Category of crime
+group_category_by_col <- function(dataset,...){
+  x <- dataset %>%
+  subset(Category %in% top10_crimes) %>%
+  #subset(Category %in% top5_crimes) %>%
+  group_by_(.dots = ...) %>%
+  summarise(count = n())
+#   x$Category <- factor(x$Category,levels = top10_crimes)
+#   return(x)
+}
+
+# Function to plot crime count in top 10 crimes with variation in different features 
+plot_category_by_col <- function(dataset,xcolname,ycolname="count"){
+  ggplot(data=dataset, aes_string(x=xcolname, y=ycolname, fill="Category")) +
+    geom_boxplot() +
+    facet_wrap(~Category,ncol = 5)+
+    #facet_wrap wraps a 1d sequence of panels into 2d
+    theme(legend.position="None",
+        axis.text.x = element_text(angle = 90, hjust = 1)) +
+
+    ggtitle( c(paste("Variations in crime by",xcolname)) )+
+    xlab(xcolname)+
+    ylab("Number of crime incidents")
+}
+
+# Group top 10 crimes by hour of crime
+data_hour_category <- group_category_by_col(training_set,"hour_of_crime","Category","year_of_crime","month_of_crime")
+data_hour_category$Category <- factor(data_hour_category$Category,levels = top10_crimes)
+head(data_hour_category)
+
+# Variations in top 10 crimes by hour of crime
+plot_category_by_col(data_hour_category,"hour_of_crime")
+
+# Group top 10 crimes by year
+data_year_category <- group_category_by_col(training_set,"year_of_crime","Category","month_of_crime")
+data_year_category$Category <- factor(data_year_category$Category,levels = top10_crimes)
+head(data_year_category)
+
+# Variations in top 10 crimes with different features
+plot_category_by_col(data_year_category,"year_of_crime")
+
+# Group top 10 crimes by day of week
+data_day_category <- group_category_by_col(training_set,"DayOfWeek","Category","year_of_crime","month_of_crime")
+data_day_category$Category <- factor(data_day_category$Category,levels = top10_crimes)
+head(data_day_category)
+  
+# Variations in top 10 crimes by day of week
+plot_category_by_col(data_day_category,"DayOfWeek")
+
+# Variations in top 10 crimes by zip code
+data_zip_category <- group_category_by_col(training_set,"zip","Category","year_of_crime","month_of_crime")
+data_zip_category$Category <- factor(data_zip_category$Category,levels = top10_crimes)
+plot_category_by_col(data_zip_category,"zip")
+
+# Variations in top 3 crimes by zip code
+top3_crimes <- Category_hist[1:3,1]
+data_zip_top3category <- training_set %>%
+  subset(Category %in% top3_crimes) %>%
+  group_by(zip,Category,year_of_crime,month_of_crime) %>%
+  summarise(count = n())
+data_zip_top3category$Category <- factor(data_zip_top3category$Category,levels = top3_crimes)
+plot_category_by_col(data_zip_top3category,"zip")
+```
+
+```{r: seach for patterns/trends}
+# Function to group data frame by category, then by a specific column and normalize all values for that column for each category.
+normalized_group_by_col <- function(dataset,...){
+     dataset %>%
+     group_by_(.dots = ...) %>% 
+     summarise(count = n()) %>% 
+     # for each category of crime, calculate mean and standard deviation and normalize all values for that category.
+     mutate(normalized_count = (count-mean(count))/sd(count)) 
+}
+
+# function to generate normalized plots to check for trends.
+# NOT WORKING
+normalized_plot <- function(dataset,xcolname,ycolname="normalized_count"){
+  ggplot(data = subset(dataset, Category %in% top10_crimes),
+         aes(x=as.numeric(xcolname), y=normalized_count, fill=normalized_count)) + 
+             geom_line()+
+             geom_point()+
+             scale_x_continuous(breaks=seq_along(levels(xcolname)),labels=levels(xcolname))
+             xlab(xcolname)+
+             ylab("Normalized crime count")}
+              
+# pattern by month
+norm_data_month <- normalized_group_by_col(training_set,"Category","month_of_crime")
+
+ggplot(data = subset(norm_data_month, Category %in% top10_crimes),
+            aes(x=as.numeric(month_of_crime), y=normalized_count,color = Category)) + 
+        geom_line()+
+        geom_point()+
+        scale_x_continuous(breaks = 1:12, labels=c("Jan","Feb","Mar",
+                                                 "Apr","May","Jun",
+                                                 "Jul","Aug","Sep",
+                                                 "Oct","Nov","Dec")) +
+        xlab("Months")+
+        ylab("Normalized crime count")
+        #theme(legend.position="None")
+
+# pattern by hour
+norm_data_hour <- normalized_group_by_col(training_set,"Category","hour_of_crime")
+ggplot(data = subset(norm_data_hour, Category %in% top10_crimes),
+        aes(x=as.numeric(hour_of_crime), y=normalized_count,color = Category)) + 
+          geom_line()+
+          geom_point()+
+         scale_x_continuous(breaks = 1:24, labels=c(0:23)) +
+          xlab("Hour")+
+          ylab("Normalized crime count")
+
+# pattern by week
+norm_data_week <- normalized_group_by_col(training_set,"Category","DayOfWeek")
+ggplot(data = subset(norm_data_week, Category %in% top10_crimes),
+        aes(x=as.numeric(DayOfWeek), y=normalized_count,color = Category)) + 
+          geom_line()+
+          geom_point()+
+         scale_x_continuous(breaks = 1:7, labels=c(levels(norm_data_week$DayOfWeek))) +
+          xlab("Day Of Week")+
+          ylab("Normalized crime count")
+# "Assault" crime seems to be high on sunday. Also certain crimes cluster and follow similar trend over days of the week
+
+# pattern by year
+norm_data_year <- normalized_group_by_col(training_set,"Category","year_of_crime")
+ggplot(data = subset(norm_data_year, Category %in% top10_crimes),
+        aes(x=as.numeric(year_of_crime), y=normalized_count,color = Category)) + 
+          geom_line()+
+          geom_point()+
+         scale_x_continuous(breaks = seq_along(levels(norm_data_year$year_of_crime)), labels=c(levels(norm_data_year$year_of_crime))) +
+          xlab("year")+
+          ylab("Normalized crime count")
+
+# pattern by zip
+norm_data_zip <- normalized_group_by_col(training_set,"Category","zip")
+ggplot(data = subset(norm_data_zip, Category %in% top10_crimes),
+        aes(x=as.numeric(zip), y=normalized_count,color = Category)) + 
+          geom_line()+
+          geom_point()+
+         scale_x_continuous(breaks = seq_along(levels(norm_data_zip$zip)), labels=c(levels(norm_data_zip$zip))) +
+          xlab("zip code")+
+          ylab("Normalized crime count")
+```
+
+```{r: overlay crimes on SF Map}
+training_set_top10crimes <- training_set[training_set$Category %in% top10_crimes, ]
+training_set_top10crimes$Category <- factor(training_set_top10crimes$Category,levels = top10_crimes)
+#   return(x)
+sfmap <- get_map(location="sanfrancisco",zoom=12,source="osm")
+
+ggmap(sfmap) +
+  geom_point(data=training_set_top10crimes, aes(x=X, y=Y, color=Category), alpha=0.05)+
+  guides(colour = guide_legend(override.aes = list(alpha=1.0, size=6.0),title="Type of Crime")) +
+  scale_colour_brewer(type="qual",palette="Paired") +
+  ggtitle("Top Crimes in San Francisco") +
+  theme_light(base_size=20) +
+  theme(axis.line=element_blank(),
+  axis.text.x=element_blank(),
+  axis.text.y=element_blank(),
+  axis.ticks=element_blank(),
+  axis.title.x=element_blank(),
+  axis.title.y=element_blank())
+
+# TO DO: Countour plots
+```
+
+**Function to Convert factor variables into dummy variables**
+```{r}
+# function to create dataset with dummy variables
+creat_dummy_var_data <- function(dataset){
+  dummy_variables <- dummyVars(~., data=dataset, fullRank=T)
+  dummy_var_data <- data.frame( predict(dummy_variables, newdata=dataset) )
+  return(dummy_var_data)
+}
+```
+
+**Function to Split data into Training and Test**
+```{r}
+create_training_test <- function(features_dataset,outcome_data,training_test_ratio){
+  training_index <- createDataPartition(outcome_data,p=training_test_ratio,list=F)
+  
+  training_set <- droplevels(features_dataset[training_index,])
+  test_set <- droplevels(features_dataset[-training_index,])
+  
+  # if you are trying to do classification using regression models, it is imp to use outcome as factor not numeric
+  outcome_training_set <- factor(outcome_data[training_index])
+  outcome_test_set <- factor(outcome_data[-training_index])
+  
+  return(list(training_features=training_set, test_features=test_set, training_outcome=outcome_training_set, test_outcome=outcome_test_set))
+}
+```
+
+**Function to Data Pre-processing**
+```{r: remove_nonvaring collinear features}
+remove_nonvaring_collinear_features <- function(training_data,test_data,corr_theshold=0.75){
+  # remove zero covaritates (features with NO VARIABILITY)
+  #nearZeroVar(training_data,saveMetrics = T)
+  near_zero_covariates <- colnames(training_data)[nearZeroVar(training_data)]
+  
+  if(length(near_zero_covariates)>0)
+  {
+    # find column indices of the near_zero_covariates
+    nzc_indices_training <- sapply(near_zero_covariates,function(i) {grep( paste("^",i,"$",sep=""),colnames(training_data))})
+    training_data_nzc <- training_data[,-nzc_indices_training]
+    
+    nzc_indices_test <- sapply(near_zero_covariates,function(i) {grep( paste("^",i,"$",sep=""),colnames(test_data))})  
+    test_data_nzc <- test_data[,-nzc_indices_test]
+  } else {
+    training_data_nzc <- training_data
+    test_data_nzc <- test_data
+  }
+
+  # CORRELATED features
+  feature_correlation <- cor(training_data_nzc)
+  # search through a correlation matrix and returns a vector of integers corresponding to     columns to remove to reduce pair-wise correlations.
+  high_correlation <- findCorrelation(feature_correlation,corr_theshold,verbose=F,names=T)
+
+  if(length(high_correlation)>0)
+  {
+    correlated_indices_training <- sapply( high_correlation,function(i) {grep( paste("^",i,"$",sep=""),colnames(training_data_nzc))} )
+    final_training_data <- training_data_nzc[,-correlated_indices_training]
+    
+    correlated_indices_test <- sapply( high_correlation,function(i) {grep( paste("^",i,"$",sep=""),colnames(test_data_nzc))} )
+    final_test_data <- test_data_nzc[,-correlated_indices_test]
+  }else{
+    final_training_data <- training_data_nzc
+    final_test_data <- test_data_nzc
+  }
+  
+  return(list(processed_training_set=final_training_data, processed_test_set=final_test_data))
+}
+```
+
+**Execution**
+```{r:}
+# leave out date and X, Y features
+training_features2 <- training_features[,c("hour_of_crime","month_of_crime","year_of_crime","DayOfWeek","PdDistrict","zip","Category")]
+sapply(training_features2[1,],class)
+# since the features are categorical, convert them into dummy varaibles except the outcome. 
+outcome_column_id <- grep("Category",colnames(training_features2))
+dataset_dummy_variables <- creat_dummy_var_data(training_features2[,-outcome_column_id])
+dim(dataset_dummy_variables)
+dataset_dummy_variables[1:3,]
+
+# TO DO:Splitting the data set into test and training again (done earlier for exploratory graphs)...shud be done only once
+
+# split data into Training and Test
+set.seed(123)
+split_data <- create_training_test(dataset_dummy_variables,training_features2$Category,0.6)
+lapply(split_data,head)
+lapply(split_data[1:2],dim)  
+
+# features with no or near zero variability
+# nearZeroVar(split_data$training_features,saveMetrics = T)
+# colnames(split_data$training_features)[nearZeroVar(split_data$training_features)]
+# table(training_features2$hour_of_crime)
+# table(training_features2$zip)
+
+# data preprocessing
+# processed_data <- remove_nonvaring_collinear_features(split_data$training_features,split_data$test_features,0.75)
+# lapply(processed_data,dim)
+# 
+# final_training_set <- processed_data$processed_training_set
+# final_test_set <- processed_data$processed_test_set
+# dim(final_training_set); dim(final_test_set)
+
+final_training_set <- split_data$training_features
+final_test_set <- split_data$test_features
+dim(final_training_set); dim(final_test_set)
+load(paste(file_location,"final_training_set.rda",sep=""))
+
+training_output <- split_data$training_outcome
+test_output <- split_data$test_outcome
+length(training_output); length(test_output)
+load(paste(file_location,"training_output.rda",sep=""))
+
+# work on smaller data
+set.seed(1)
+sample_indices <- sample(1:nrow(final_training_set),50000)
+sample_data <- droplevels(final_training_set[sample_indices,])
+head(sample_data)
+sample_output <- droplevels(training_output[sample_indices])
+```
+
+**Model building**
+```{r: }
+# k-fold cross validation
+train_control <- trainControl(method="cv", number=3, savePredictions = T,classProbs =  TRUE)
+
+# logistic regression
+set.seed(1)
+# glm_model <- train(y=sample_output, x=sample_data, trControl=train_control, method = "glm",family=binomial,maxit=100, preProcess = c("center", "scale","pca"))
+glm_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "glm",family=binomial,maxit=100, preProcess = c("center", "scale","pca"))
+
+# svm - linear
+set.seed(1)
+svm_lm_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "svmLinear",preProcess = c("center", "scale","pca"))
+
+# svm - rbf kernel
+set.seed(1)
+svm_rbf_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "svmRadial", tuneLegth=5, preProcess = c("center", "scale","pca"))
+
+# random forest
+set.seed(1)
+rf_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "rf",prox=T,preProcess = c("center", "scale"))
+plot(rf_model)
+```
