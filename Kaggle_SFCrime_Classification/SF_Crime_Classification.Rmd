@@ -481,10 +481,9 @@ sample_output <- droplevels(training_output[sample_indices])
 # k-fold cross validation
 train_control <- trainControl(method="cv", number=3, savePredictions = T,classProbs =  TRUE)
 
-# logistic regression
+# logistic regression: use multinom or glmnet; glm works on for 2 classes 
 set.seed(1)
-# glm_model <- train(y=sample_output, x=sample_data, trControl=train_control, method = "glm",family=binomial,maxit=100, preProcess = c("center", "scale","pca"))
-glm_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "glm",family=binomial,maxit=100, preProcess = c("center", "scale","pca"))
+lasso_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "glmnet",family = "multinomial",tuneGrid=expand.grid(alpha=1,lambda=0.001),preProcess = c("center", "scale","pca"))
 
 # svm - linear
 set.seed(1)
