@@ -53,7 +53,7 @@ FeatureExtraction <- function(dataset,zip){
 
 # Feature engineering: get zip code from latitude and longitude
 data(zipcode)
-sf_zipcodes <- subset(zipcode,city=="San Francisco",)
+sf_zipcodes <- subset(zipcode,city=="San Francisco" & state=="CA",)
 sf_zipcodes$latitude <- as.numeric(format(sf_zipcodes$latitude,digits=8))
 sf_zipcodes$longitude <- as.numeric(format(sf_zipcodes$longitude,digits=8))
 dim(sf_zipcodes)
