@@ -28,7 +28,6 @@ Chronic_Kidney_Disease <- read.arff(paste(file_location,"chronic_kidney_disease.
 # data munging
 dim(Chronic_Kidney_Disease)
 head(Chronic_Kidney_Disease)
-colnames(Chronic_Kidney_Disease)
 summary(Chronic_Kidney_Disease)
 
 # % data missing in each column
@@ -62,7 +61,6 @@ create_training_test <- function(features_dataset,outcome_data,training_test_rat
   training_set <- droplevels(features_dataset[training_index,])
   test_set <- droplevels(features_dataset[-training_index,])
   
-  # if you are trying to do classification using regression models, it is imp to use outcome as factor not numeric
   outcome_training_set <- factor(outcome_data[training_index])
   outcome_test_set <- factor(outcome_data[-training_index])
   
@@ -92,7 +90,7 @@ remove_nonvaring_collinear_features <- function(training_data,test_data,corr_the
 
   # CORRELATED features
   feature_correlation <- cor(training_data_nzc)
-  # search through a correlation matrix and returns a vector of integers corresponding to     columns to remove to reduce pair-wise correlations.
+  # search through a correlation matrix and returns a vector of integers corresponding to columns to remove to reduce pair-wise correlations.
   high_correlation <- findCorrelation(feature_correlation,corr_theshold,verbose=F,names=T)
 
   if(length(high_correlation)>0)
@@ -113,7 +111,7 @@ remove_nonvaring_collinear_features <- function(training_data,test_data,corr_the
 
 **Execution**
 ```{r: Run the above functions to create model}
-sapply(Chronic_Kidney_Disease2[1,],class)
+#sapply(Chronic_Kidney_Disease2[1,],class)
 # since many of the features are categorical, convert them into dummy varaibles except the outcome. 
 outcome_column_id <- grep("class",colnames(Chronic_Kidney_Disease2))
 dataset_dummy_variables <- creat_dummy_var_data(Chronic_Kidney_Disease2[,-outcome_column_id])
@@ -127,15 +125,15 @@ lapply(split_data[1:2],dim)
 
 # data preprocessing
 processed_data <- remove_nonvaring_collinear_features(split_data$training_features,split_data$test_features,0.75)
-lapply(processed_data,dim)
+#lapply(processed_data,dim)
 
 final_training_set <- processed_data$processed_training_set
 final_test_set <- processed_data$processed_test_set
-dim(final_training_set); dim(final_test_set)
+#dim(final_training_set); dim(final_test_set)
 
 training_output <- split_data$training_outcome
 test_output <- split_data$test_outcome
-length(training_output); length(test_output)
+#length(training_output); length(test_output)
 ```
 
 **Exploratory data analysis**
@@ -168,8 +166,8 @@ set.seed(1)
 svm_rbf_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "svmRadial", tuneLegth=5, preProcess = c("center", "scale","pca"))
 
 # logistic regression
-set.seed(1)
-glm_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "glm",family=binomial,maxit=100, preProcess = c("center", "scale","pca"))
+# set.seed(1)
+# glm_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "glm",family=binomial,maxit=100, preProcess = c("center", "scale","pca"))
 # possible warnings with glm:
 #1. "glm.fit: algorithm did not converge"; use maxit much greater than default value of 25"
 #2. "glm.fit: fitted probabilities numerically 0 or 1 occurred" indicates that you should use penalized regression. Your fit is exactly collinear.
@@ -206,16 +204,7 @@ gbm_model <- train(y=training_output, x=final_training_set, trControl=train_cont
 set.seed(1)
 lda_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "lda",preProcess = c("center", "scale","pca"))
 
-# naive bayes
-# parameters of the algorithm: fl: Factor for Laplace correction, default factor is 0, i.e. no correction;
-# usekernel: if TRUE a kernel density estimate (density) is used for denstity estimation. If FALSE a normal density is estimated.
-# set.seed(1)
-# nb_model <- train(y=training_output, x=final_training_set, trControl=train_control, method="nb", tuneGrid=expand.grid(.fL=c(0), .usekernel=c(TRUE)) ,preProcess = c("center", "scale","pca"))
-# warnings()
-# "The function NaiveBayes prints a warning if all these probabilities are numerical 0, i.e. that the observation has a numerical probability of 0 for all classes. "
-
 # collect resamples
-training_models <- list(SVM_LM=svm_lm_model,SVM_RBF=svm_rbf_model,RPART=rpart_model,GBM=gbm_model,RF=rf_model,LDA=lda_model,RIDGE=ridge_regression_model,LASSO=lasso_model,ELASTIC=elastic_net_model)
 train_results <- resamples(training_models)
 # summarize the distributions
 summary(train_results)
