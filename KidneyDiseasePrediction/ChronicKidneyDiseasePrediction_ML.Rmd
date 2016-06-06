@@ -205,6 +205,7 @@ set.seed(1)
 lda_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "lda",preProcess = c("center", "scale","pca"))
 
 # collect resamples
+training_models <- list(SVM_LM=svm_lm_model,SVM_RBF=svm_rbf_model,RPART=rpart_model,GBM=gbm_model,RF=rf_model,LDA=lda_model,RIDGE=ridge_regression_model,LASSO=lasso_model,ELASTIC=elastic_net_model)
 train_results <- resamples(training_models)
 # summarize the distributions
 summary(train_results)
