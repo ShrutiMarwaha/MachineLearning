@@ -82,6 +82,7 @@ revgeocode(c(train_data$X[1], train_data$Y[1]))
 # zip_codes_training <- apply(train_data[,c("Y","X")],1,closest_zipcode)
 # save(zip_codes_training,file=paste(file_location,"zip_codes_training.rda",sep=""))
 load(paste(file_location,"zip_codes_training.rda",sep=""))
+#length(unique(zip_codes_training))
 
 # zip_codes_test <- apply(test_data[,c("Y","X")],1,closest_zipcode)
 # save(zip_codes_test,file=paste(file_location,"zip_codes_test.rda",sep=""))
