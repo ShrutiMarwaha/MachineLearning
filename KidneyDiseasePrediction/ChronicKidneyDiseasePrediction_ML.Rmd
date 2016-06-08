@@ -19,7 +19,7 @@ suppressWarnings (library(rpart.plot))
 suppressWarnings (library(rattle))
 ```
 
-**load data** 
+**Data Exploration** 
 ```{r}
 # load data
 file_location <- file.path("/Users","shruti","Dropbox","SHRUTIM","Rscripts","MachineLearning","KidneyDiseasePrediction/")
@@ -27,7 +27,7 @@ Chronic_Kidney_Disease <- read.arff(paste(file_location,"chronic_kidney_disease.
 
 # data munging
 dim(Chronic_Kidney_Disease)
-head(Chronic_Kidney_Disease)
+Chronic_Kidney_Disease[1:2,]
 summary(Chronic_Kidney_Disease)
 
 # % data missing in each column
@@ -136,7 +136,7 @@ test_output <- split_data$test_outcome
 #length(training_output); length(test_output)
 ```
 
-**Exploratory data analysis**
+**Exploratory Graphs**
 ```{r:plots}
 # PCA
 pc <- prcomp(final_training_set,center=T,scale=T)
@@ -152,7 +152,7 @@ for(i in seq_along(colnames(final_training_set)))
 par(mfrow=c(1,1))
 ```
 
-**model building**
+**Model Building**
 ```{r: }
 # k-fold cross validation
 train_control <- trainControl(method="cv", number=5, savePredictions = T,classProbs =  TRUE)
@@ -164,14 +164,6 @@ svm_lm_model <- train(y=training_output, x=final_training_set, trControl=train_c
 # svm - rbf kernel
 set.seed(1)
 svm_rbf_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "svmRadial", tuneLegth=5, preProcess = c("center", "scale","pca"))
-
-# logistic regression
-# set.seed(1)
-# glm_model <- train(y=training_output, x=final_training_set, trControl=train_control, method = "glm",family=binomial,maxit=100, preProcess = c("center", "scale","pca"))
-# possible warnings with glm:
-#1. "glm.fit: algorithm did not converge"; use maxit much greater than default value of 25"
-#2. "glm.fit: fitted probabilities numerically 0 or 1 occurred" indicates that you should use penalized regression. Your fit is exactly collinear.
-#3. "prediction from a rank-deficient fit may be misleading in:" indicates If the fit is rank-deficient, some of the columns of the design matrix will have been dropped. Prediction from such a fit only makes sense if 'newdata' is contained in the same subspace as the original data.
 
 # Ridge Regression creates a linear regression model that is penalized with the L2-norm which is the sum of the squared coefficients.
 set.seed(1)
@@ -218,31 +210,31 @@ bwplot(train_results)
 ```{r}
 #Ideally, you select model that performs best on training data and evaluate on test set. I am doing for all models just for illustration 
 test_pred_svm_lm <- predict(svm_lm_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_svm_lm, reference=test_output)
+#confusionMatrix(data=test_pred_svm_lm, reference=test_output)
 
 test_pred_svm_rbf <- predict(svm_rbf_model, newdata=final_test_set)
 confusionMatrix(data=test_pred_svm_rbf, reference=test_output)
 
 test_pred_rpart <- predict(rpart_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_rpart, test_output)
+#confusionMatrix(data=test_pred_rpart, test_output)
 
 test_pred_gbm <- predict(gbm_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_gbm, test_output)
+#confusionMatrix(data=test_pred_gbm, test_output)
 
 test_pred_rf <- predict(rf_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_rf, test_output)
+#confusionMatrix(data=test_pred_rf, test_output)
 
 test_pred_lda <- predict(lda_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_lda, test_output)
+#confusionMatrix(data=test_pred_lda, test_output)
 
 test_pred_ridge <- predict(ridge_regression_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_ridge, test_output)
+#confusionMatrix(data=test_pred_ridge, test_output)
 
 test_pred_lasso <- predict(lasso_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_lasso, test_output)
+#confusionMatrix(data=test_pred_lasso, test_output)
 
 test_pred_elastic_net <- predict(elastic_net_model, newdata=final_test_set)
-confusionMatrix(data=test_pred_elastic_net, test_output)
+#confusionMatrix(data=test_pred_elastic_net, test_output)
 
 balanced_accuracy <- function(trained_model, test_features=final_test_set, test_outcomes=test_output){
   test_model <- predict(trained_model,test_features)
@@ -273,21 +265,10 @@ roc_curve(test_pred_gbm,colour=5)
 par(new = FALSE)
 legend("bottomright",c("svm radial kernel", "lda","random forest","elastic_net","graded boosting"), col = c(1:5),cex=0.8,lty=1)
 title(main="ROC curves for test data")
-
-# roc_curve(test_pred_svm_lm,colour=5)
-# par(new = TRUE)
-# roc_curve(test_pred_ridge,colour=6)
-# par(new = TRUE)
-# roc_curve(test_pred_lasso,colour=7)
-# par(new = TRUE)
-# roc_curve(test_pred_rpart,colour=8)
-# par(new = FALSE)
-# legend("bottomright",c("svm radial kernel", "lda","random forest","elastic_net","gbm","svm_lm","ridge","lasso","rpart"), col = c(2:9),cex=0.8,lty=1)
 ```
 
 **Feature Importance**
 ```{r: Variable Importance}
-varImp(svm_rbf_model)
 plot(varImp(svm_rbf_model))
 
 ckd_training_set <- which(training_output=="ckd")
@@ -297,18 +278,6 @@ imp_features_svm <- (c("rbc.c","bu","sod","bgr","age"))
 sapply(imp_features_svm,function(i) {
   t.test(final_training_set[ckd_training_set,i],final_training_set[nonckd_training_set,i])
 })
-
-varImp(rf_model)
-plot(varImp(rf_model))
-
-set.seed(1)
-rpart_model2 <- train(y=training_output, x=final_training_set, trControl=train_control, method = "rpart") # without scaling n pca
-plot(varImp(rpart_model2))
-# plot classification trees
-fancyRpartPlot(rpart_model2$finalModel)
-plot(Chronic_Kidney_Disease2$class,Chronic_Kidney_Disease2$pcv,main="rbcc")
-
-#lapply(training_models,varImp)
 ```
 
 
